@@ -16,6 +16,7 @@ export async function addEvent(formData: FormData) {
   const assignedTo = (formData.get("assigned_to") as string) || "";
   const recurrence = (formData.get("recurrence") as string) || "none";
   const recurrenceEnd = (formData.get("recurrence_end") as string) || null;
+  const eventType = (formData.get("event_type") as string) || "general";
 
   await supabase.from("calendar_events").insert({
     household_id: household.householdId,
@@ -27,6 +28,7 @@ export async function addEvent(formData: FormData) {
     color: colorForName(assignedTo || "shared"),
     recurrence,
     recurrence_end: recurrence === "none" ? null : recurrenceEnd,
+    event_type: eventType,
     created_by: household.userId,
   });
 

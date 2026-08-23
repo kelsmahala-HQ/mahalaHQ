@@ -10,8 +10,20 @@ create table if not exists households (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   invite_code text not null unique default substr(md5(random()::text), 1, 8),
+  calendar_feed_token text not null unique default encode(gen_random_bytes(16), 'hex'),
   created_at timestamptz not null default now()
 );
+
+-- Adds calendar_feed_token to households for installs that ran an earlier version of this script.
+alter table households add column if not exists calendar_feed_token text;
+update households set calendar_feed_token = encode(gen_random_bytes(16), 'hex') where calendar_feed_token is null;
+alter table households alter column calendar_feed_token set not null;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'households_calendar_feed_token_key') then
+    alter table households add constraint households_calendar_feed_token_key unique (calendar_feed_token);
+  end if;
+end $$;
 
 create table if not exists household_members (
   id uuid primary key default gen_random_uuid(),
@@ -109,13 +121,24 @@ create table if not exists calendar_events (
   color text not null default '#6366f1',
   recurrence text not null default 'none' check (recurrence in ('none', 'daily', 'weekly', 'monthly', 'yearly')),
   recurrence_end date,
+  event_type text not null default 'general' check (event_type in ('general', 'birthday', 'appointment', 'holiday', 'school')),
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
 
--- Adds recurrence to calendar_events for installs that ran an earlier version of this script.
+-- Adds recurrence/event_type to calendar_events for installs that ran an earlier version of this script.
 alter table calendar_events add column if not exists recurrence text not null default 'none';
 alter table calendar_events add column if not exists recurrence_end date;
+alter table calendar_events add column if not exists event_type text not null default 'general';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'calendar_events_event_type_check') then
+    alter table calendar_events
+      add constraint calendar_events_event_type_check
+      check (event_type in ('general', 'birthday', 'appointment', 'holiday', 'school'));
+  end if;
+end $$;
+
 do $$
 begin
   if not exists (
@@ -221,6 +244,32 @@ create table if not exists budget_transactions (
   created_at timestamptz not null default now()
 );
 
+-- Superseded by bills/bill_payments below (kept in place, unused, so no data is lost).
+
+create table if not exists bills (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  name text not null,
+  type text not null default 'expense' check (type in ('income', 'expense')),
+  category text not null default 'Other',
+  amount numeric(12, 2) not null,
+  frequency text not null default 'monthly'
+    check (frequency in ('once', 'weekly', 'biweekly', 'monthly', 'quarterly', 'semiannual', 'yearly')),
+  due_date date not null, -- anchor occurrence; for 'once' this is simply the transaction date
+  assigned_to text,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists bill_payments (
+  id uuid primary key default gen_random_uuid(),
+  bill_id uuid not null references bills(id) on delete cascade,
+  household_id uuid not null references households(id) on delete cascade,
+  amount numeric(12, 2) not null,
+  paid_on date not null default current_date,
+  created_at timestamptz not null default now()
+);
+
 -- ============================================================================
 -- Debts (tracking only -- no automated payments; see README)
 -- ============================================================================
@@ -234,16 +283,30 @@ create table if not exists debts (
   current_balance numeric(12, 2) not null default 0,
   interest_rate numeric(5, 2),
   minimum_payment numeric(12, 2),
-  due_day integer check (due_day between 1 and 31),
+  due_day integer check (due_day between 1 and 31), -- used when payment_frequency = 'monthly'
+  payment_frequency text not null default 'monthly' check (payment_frequency in ('monthly', 'weekly')),
+  due_weekday integer check (due_weekday between 0 and 6), -- 0=Sunday..6=Saturday, used when payment_frequency = 'weekly'
   notes text,
   is_focus boolean not null default false,
   plaid_account_id text unique, -- links this row to a synced credit/loan account; null for manually-tracked debts
   created_at timestamptz not null default now()
 );
 
--- Adds is_focus/plaid_account_id to debts for installs that ran an earlier version of this script.
+-- Adds is_focus/plaid_account_id/payment_frequency/due_weekday to debts for installs that ran an earlier version of this script.
 alter table debts add column if not exists is_focus boolean not null default false;
 alter table debts add column if not exists plaid_account_id text;
+alter table debts add column if not exists payment_frequency text not null default 'monthly';
+alter table debts add column if not exists due_weekday integer;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'debts_payment_frequency_check') then
+    alter table debts add constraint debts_payment_frequency_check check (payment_frequency in ('monthly', 'weekly'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'debts_due_weekday_check') then
+    alter table debts add constraint debts_due_weekday_check check (due_weekday between 0 and 6);
+  end if;
+end $$;
+
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'debts_plaid_account_id_key') then
@@ -336,6 +399,8 @@ alter table budget_categories enable row level security;
 alter table budget_transactions enable row level security;
 alter table debts enable row level security;
 alter table debt_payments enable row level security;
+alter table bills enable row level security;
+alter table bill_payments enable row level security;
 alter table roundup_settings enable row level security;
 alter table roundup_purchases enable row level security;
 alter table roundup_payouts enable row level security;
@@ -378,7 +443,7 @@ declare
   tables text[] := array[
     'family_profiles', 'emergency_contacts', 'calendar_events', 'chores',
     'maintenance_tasks', 'grocery_items', 'documents',
-    'budget_categories', 'budget_transactions', 'debts',
+    'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments',
     'roundup_settings', 'roundup_purchases', 'roundup_payouts'
   ];
 begin

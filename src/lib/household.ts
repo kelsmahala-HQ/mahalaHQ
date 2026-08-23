@@ -7,6 +7,7 @@ export type CurrentHousehold = {
   householdId: string;
   householdName: string;
   inviteCode: string;
+  calendarFeedToken: string;
   memberId: string;
   displayName: string;
   role: Role;
@@ -24,7 +25,7 @@ export async function requireHousehold(): Promise<CurrentHousehold> {
 
   const { data: membership } = await supabase
     .from("household_members")
-    .select("id, display_name, role, household_id, households ( name, invite_code )")
+    .select("id, display_name, role, household_id, households ( name, invite_code, calendar_feed_token )")
     .eq("user_id", user.id)
     .limit(1)
     .maybeSingle();
@@ -34,12 +35,14 @@ export async function requireHousehold(): Promise<CurrentHousehold> {
   const household = membership.households as unknown as {
     name: string;
     invite_code: string;
+    calendar_feed_token: string;
   };
 
   return {
     householdId: membership.household_id,
     householdName: household.name,
     inviteCode: household.invite_code,
+    calendarFeedToken: household.calendar_feed_token,
     memberId: membership.id,
     displayName: membership.display_name,
     role: membership.role as Role,

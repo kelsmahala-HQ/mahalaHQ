@@ -10,6 +10,8 @@ export async function addDebt(formData: FormData) {
   const supabase = await createClient();
   const balance = Number(formData.get("current_balance"));
 
+  const paymentFrequency = (formData.get("payment_frequency") as string) || "monthly";
+
   await supabase.from("debts").insert({
     household_id: household.householdId,
     name: formData.get("name") as string,
@@ -18,7 +20,9 @@ export async function addDebt(formData: FormData) {
     current_balance: balance,
     interest_rate: formData.get("interest_rate") ? Number(formData.get("interest_rate")) : null,
     minimum_payment: formData.get("minimum_payment") ? Number(formData.get("minimum_payment")) : null,
-    due_day: formData.get("due_day") ? Number(formData.get("due_day")) : null,
+    payment_frequency: paymentFrequency,
+    due_day: paymentFrequency === "monthly" && formData.get("due_day") ? Number(formData.get("due_day")) : null,
+    due_weekday: paymentFrequency === "weekly" && formData.get("due_weekday") ? Number(formData.get("due_weekday")) : null,
   });
 
   revalidatePath("/debts");

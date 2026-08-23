@@ -4,6 +4,8 @@ import { requireAdult } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { addDebt, deleteDebt, logPayment, setFocusDebt } from "./actions";
 
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
@@ -56,7 +58,30 @@ export default async function DebtsPage() {
           <input name="current_balance" type="number" step="0.01" required placeholder="Current balance" className={inputClass} />
           <input name="interest_rate" type="number" step="0.01" placeholder="Interest rate %" className={inputClass} />
           <input name="minimum_payment" type="number" step="0.01" placeholder="Minimum payment" className={inputClass} />
-          <input name="due_day" type="number" min={1} max={31} placeholder="Due day of month" className={inputClass} />
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Payment frequency</label>
+            <select name="payment_frequency" defaultValue="monthly" className={inputClass}>
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">If monthly: due day (1–31)</label>
+            <input name="due_day" type="number" min={1} max={31} placeholder="e.g. 15" className={inputClass} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-xs font-medium text-slate-500">If weekly: due day of week</label>
+            <select name="due_weekday" defaultValue="" className={inputClass}>
+              <option value="">—</option>
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </div>
           <button type="submit" className={`${buttonClass} sm:col-span-2`}>
             Add debt
           </button>
@@ -92,7 +117,11 @@ export default async function DebtsPage() {
                           d.creditor,
                           d.interest_rate ? `${d.interest_rate}% APR` : null,
                           d.minimum_payment ? `min ${currency(Number(d.minimum_payment))}` : null,
-                          d.due_day ? `due day ${d.due_day}` : null,
+                          d.payment_frequency === "weekly" && d.due_weekday !== null
+                            ? `due ${WEEKDAY_NAMES[d.due_weekday]}s`
+                            : d.due_day
+                              ? `due day ${d.due_day}`
+                              : null,
                         ]
                           .filter(Boolean)
                           .join(" · ")}

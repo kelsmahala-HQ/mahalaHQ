@@ -4,61 +4,87 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 
-export async function addCategory(formData: FormData) {
+export async function addBill(formData: FormData) {
   const household = await requireHousehold();
   const supabase = await createClient();
+  const frequency = (formData.get("frequency") as string) || "monthly";
+  const amount = Number(formData.get("amount"));
+  const dueDate = formData.get("due_date") as string;
 
-  await supabase.from("budget_categories").insert({
-    household_id: household.householdId,
-    name: formData.get("name") as string,
-    type: (formData.get("type") as string) || "expense",
-    monthly_limit: formData.get("monthly_limit") ? Number(formData.get("monthly_limit")) : null,
-  });
+  const { data: bill } = await supabase
+    .from("bills")
+    .insert({
+      household_id: household.householdId,
+      name: formData.get("name") as string,
+      type: (formData.get("type") as string) || "expense",
+      category: (formData.get("category") as string) || "Other",
+      amount,
+      frequency,
+      due_date: dueDate,
+      assigned_to: (formData.get("assigned_to") as string) || null,
+      notes: (formData.get("notes") as string) || null,
+    })
+    .select("id")
+    .single();
+
+  // A one-time bill is just a transaction -- record it as already paid immediately.
+  if (bill && frequency === "once") {
+    await supabase.from("bill_payments").insert({
+      bill_id: bill.id,
+      household_id: household.householdId,
+      amount,
+      paid_on: dueDate,
+    });
+  }
 
   revalidatePath("/budget");
+  revalidatePath("/calendar");
 }
 
-export async function updateCategoryLimit(formData: FormData) {
+export async function updateBill(formData: FormData) {
   await requireHousehold();
   const supabase = await createClient();
   const id = formData.get("id") as string;
-  const limit = formData.get("monthly_limit");
 
   await supabase
-    .from("budget_categories")
-    .update({ monthly_limit: limit ? Number(limit) : null })
+    .from("bills")
+    .update({
+      name: formData.get("name") as string,
+      category: (formData.get("category") as string) || "Other",
+      amount: Number(formData.get("amount")),
+      assigned_to: (formData.get("assigned_to") as string) || null,
+    })
     .eq("id", id);
 
   revalidatePath("/budget");
+  revalidatePath("/calendar");
 }
 
-export async function deleteCategory(formData: FormData) {
+export async function deleteBill(formData: FormData) {
   await requireHousehold();
   const supabase = await createClient();
-  await supabase.from("budget_categories").delete().eq("id", formData.get("id") as string);
+  await supabase.from("bills").delete().eq("id", formData.get("id") as string);
   revalidatePath("/budget");
+  revalidatePath("/calendar");
 }
 
-export async function addTransaction(formData: FormData) {
+export async function markBillPaid(formData: FormData) {
   const household = await requireHousehold();
   const supabase = await createClient();
-  const categoryId = formData.get("category_id") as string;
 
-  await supabase.from("budget_transactions").insert({
+  await supabase.from("bill_payments").insert({
+    bill_id: formData.get("bill_id") as string,
     household_id: household.householdId,
-    category_id: categoryId || null,
     amount: Number(formData.get("amount")),
-    description: formData.get("description") as string,
-    occurred_on: (formData.get("occurred_on") as string) || new Date().toISOString().slice(0, 10),
-    created_by: household.userId,
+    paid_on: (formData.get("paid_on") as string) || new Date().toISOString().slice(0, 10),
   });
 
   revalidatePath("/budget");
 }
 
-export async function deleteTransaction(formData: FormData) {
+export async function deleteBillPayment(formData: FormData) {
   await requireHousehold();
   const supabase = await createClient();
-  await supabase.from("budget_transactions").delete().eq("id", formData.get("id") as string);
+  await supabase.from("bill_payments").delete().eq("id", formData.get("id") as string);
   revalidatePath("/budget");
 }
