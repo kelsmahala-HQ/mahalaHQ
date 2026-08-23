@@ -52,14 +52,10 @@ export default async function BudgetPage({
   const incomeBills = billsThisPeriod.filter((b) => b.type === "income");
   const expenseBills = billsThisPeriod.filter((b) => b.type === "expense");
 
-  let totalIncome = 0;
-  let totalExpense = 0;
-  for (const b of billsThisPeriod) {
-    const paid = paidByBill.get(b.id);
-    if (!paid) continue;
-    if (b.type === "income") totalIncome += paid.amount;
-    else totalExpense += paid.amount;
-  }
+  // Planned totals (everything due this week, whether checked off yet or not) so you can see up
+  // front whether the week is affordable, before marking anything paid.
+  const totalIncome = incomeBills.reduce((sum, b) => sum + Number(b.amount), 0);
+  const totalExpense = expenseBills.reduce((sum, b) => sum + Number(b.amount), 0);
   const remaining = totalIncome - totalExpense;
 
   const prevWeek = format(subWeeks(periodStartDate, 1), "yyyy-MM-dd");
@@ -91,7 +87,7 @@ export default async function BudgetPage({
         </div>
       </Card>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-1 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <p className="text-xs font-medium uppercase text-slate-400">Income</p>
           <p className="mt-1 text-2xl font-semibold text-teal-600">{currency(totalIncome)}</p>
@@ -107,6 +103,7 @@ export default async function BudgetPage({
           </p>
         </Card>
       </div>
+      <p className="mb-6 text-xs text-slate-400">Everything due this week, whether it&rsquo;s checked off yet or not.</p>
 
       <Card>
         <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">Income</h2>

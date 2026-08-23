@@ -22,21 +22,12 @@ export default async function BudgetMonthPage({
   const monthStart = startOfMonth(anchor);
   const monthEnd = endOfMonth(anchor);
   const weeks = weeksInMonth(monthStart, monthEnd);
-  const rangeStart = format(weeks[0], "yyyy-MM-dd");
-  const rangeEnd = format(endOfWeek(weeks[weeks.length - 1], PAY_PERIOD_OPTS), "yyyy-MM-dd");
 
-  const [{ data: bills }, { data: payments }, { data: reschedules }] = await Promise.all([
+  const [{ data: bills }, { data: reschedules }] = await Promise.all([
     supabase.from("bills").select("*").eq("household_id", household.householdId),
-    supabase
-      .from("bill_payments")
-      .select("bill_id, amount, paid_on")
-      .eq("household_id", household.householdId)
-      .gte("paid_on", rangeStart)
-      .lte("paid_on", rangeEnd),
     supabase.from("bill_reschedules").select("*").eq("household_id", household.householdId),
   ]);
 
-  const billsById = new Map((bills ?? []).map((b) => [b.id, b]));
   const currentWeekStart = format(startOfWeek(new Date(), PAY_PERIOD_OPTS), "yyyy-MM-dd");
 
   const weekRows = weeks.map((weekStart) => {
@@ -49,15 +40,9 @@ export default async function BudgetMonthPage({
       .filter((b): b is typeof b & { occurrence: Date } => b.occurrence !== null);
     const billsThisWeek = applyReschedules(bills ?? [], natural, reschedules ?? [], weekStart);
 
-    let income = 0;
-    let expense = 0;
-    for (const p of payments ?? []) {
-      if (p.paid_on < weekStartStr || p.paid_on > weekEndStr) continue;
-      const bill = billsById.get(p.bill_id);
-      if (!bill) continue;
-      if (bill.type === "income") income += Number(p.amount);
-      else expense += Number(p.amount);
-    }
+    // Planned totals -- everything due that week, whether it's been paid yet or not.
+    const income = billsThisWeek.filter((b) => b.type === "income").reduce((sum, b) => sum + Number(b.amount), 0);
+    const expense = billsThisWeek.filter((b) => b.type === "expense").reduce((sum, b) => sum + Number(b.amount), 0);
 
     const tag = billsThisWeek
       .filter((b) => b.type === "income")

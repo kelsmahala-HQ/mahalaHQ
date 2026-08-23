@@ -99,14 +99,9 @@ export default async function DashboardPage() {
   const billsThisPeriod = applyReschedules(bills ?? [], naturalThisPeriod, reschedules ?? [], periodStartDate).sort(
     (a, b) => a.occurrence.getTime() - b.occurrence.getTime()
   );
-  let totalIncome = 0;
-  let totalExpense = 0;
-  for (const b of billsThisPeriod) {
-    const paid = paidByBill.get(b.id);
-    if (paid === undefined) continue;
-    if (b.type === "income") totalIncome += paid;
-    else totalExpense += paid;
-  }
+  // Planned totals -- everything due this period, whether it's been paid yet or not.
+  const totalIncome = billsThisPeriod.filter((b) => b.type === "income").reduce((sum, b) => sum + Number(b.amount), 0);
+  const totalExpense = billsThisPeriod.filter((b) => b.type === "expense").reduce((sum, b) => sum + Number(b.amount), 0);
   const remaining = totalIncome - totalExpense;
   const unpaidBillsThisPeriod = billsThisPeriod.filter((b) => b.type === "expense" && !paidByBill.has(b.id));
 
