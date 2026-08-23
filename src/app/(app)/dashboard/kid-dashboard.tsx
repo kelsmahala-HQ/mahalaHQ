@@ -3,23 +3,34 @@ import { createClient } from "@/lib/supabase/server";
 import type { CurrentHousehold } from "@/lib/household";
 import { completeChore } from "../chores/actions";
 import { wallClockDate } from "@/lib/wall-clock";
+import RedeemButton from "../chores/redeem-button";
 
 export default async function KidDashboard({ household }: { household: CurrentHousehold }) {
   const supabase = await createClient();
 
-  const { data: chores } = await supabase
-    .from("chores")
-    .select("*")
-    .eq("household_id", household.householdId)
-    .eq("assigned_member_id", household.memberId)
-    .order("status")
-    .order("due_date", { nullsFirst: false });
+  const [{ data: chores }, { data: completions }, { data: rewards }, { data: redemptions }] = await Promise.all([
+    supabase
+      .from("chores")
+      .select("*")
+      .eq("household_id", household.householdId)
+      .eq("assigned_member_id", household.memberId)
+      .order("status")
+      .order("due_date", { nullsFirst: false }),
+    supabase.from("chore_completions").select("points").eq("member_id", household.memberId),
+    supabase.from("rewards").select("*").eq("household_id", household.householdId).order("cost"),
+    supabase.from("reward_redemptions").select("*").eq("member_id", household.memberId).order("requested_at", { ascending: false }),
+  ]);
 
   const openChores = (chores ?? []).filter((c) => c.status === "open");
-  const donePoints = (chores ?? [])
-    .filter((c) => c.status === "done")
-    .reduce((sum, c) => sum + (c.points ?? 0), 0);
   const availablePoints = openChores.reduce((sum, c) => sum + (c.points ?? 0), 0);
+
+  const earned = (completions ?? []).reduce((sum, c) => sum + c.points, 0);
+  const pendingRedemptions = (redemptions ?? []).filter((r) => r.status === "pending");
+  const reserved = (redemptions ?? [])
+    .filter((r) => r.status === "pending" || r.status === "approved")
+    .reduce((sum, r) => sum + r.cost, 0);
+  const balance = earned - reserved;
+  const pendingRewardIds = new Set(pendingRedemptions.map((r) => r.reward_id));
 
   const now = new Date();
   const { data: events } = await supabase
@@ -40,19 +51,40 @@ export default async function KidDashboard({ household }: { household: CurrentHo
             ? "You're all caught up — awesome job! 🎉"
             : `You have ${openChores.length} chore${openChores.length === 1 ? "" : "s"} waiting — go earn some stars!`}
         </p>
-        {(availablePoints > 0 || donePoints > 0) && (
+        {(availablePoints > 0 || earned > 0) && (
           <div className="mt-4 flex gap-4">
             <div className="rounded-xl bg-white/15 px-4 py-2">
               <p className="text-xs uppercase tracking-wide text-teal-50">Up for grabs</p>
               <p className="text-xl font-bold">⭐ {availablePoints}</p>
             </div>
             <div className="rounded-xl bg-white/15 px-4 py-2">
-              <p className="text-xs uppercase tracking-wide text-teal-50">Already earned</p>
-              <p className="text-xl font-bold">🏆 {donePoints}</p>
+              <p className="text-xs uppercase tracking-wide text-teal-50">Balance</p>
+              <p className="text-xl font-bold">🏆 {balance}</p>
             </div>
           </div>
         )}
       </div>
+
+      {!!rewards?.length && (
+        <div className="mb-6">
+          <h2 className="mb-3 text-lg font-bold text-slate-900">🎁 Rewards</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {rewards.map((r) => (
+              <div key={r.id} className="rounded-2xl border-2 border-teal-100 bg-white p-4 shadow-sm">
+                <p className="text-sm font-semibold text-slate-900">{r.name}</p>
+                <p className="mb-2 mt-0.5 text-xs font-medium text-teal-700">⭐ {r.cost}</p>
+                {pendingRewardIds.has(r.id) ? (
+                  <button disabled className="w-full rounded-xl bg-slate-100 py-2 text-xs font-bold text-slate-400">
+                    Waiting for approval
+                  </button>
+                ) : (
+                  <RedeemButton rewardId={r.id} canAfford={balance >= r.cost} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mb-6">
         <h2 className="mb-3 text-lg font-bold text-slate-900">🧹 Your Chores</h2>

@@ -36,12 +36,15 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
 }
 
 export async function completeChore(formData: FormData) {
-  await requireHousehold();
+  const household = await requireHousehold();
   const supabase = await createClient();
   const id = formData.get("id") as string;
-  const frequency = formData.get("frequency") as string;
 
-  if (frequency === "once") {
+  const { data: chore } = await supabase.from("chores").select("*").eq("id", id).single();
+  if (!chore) return;
+  if (chore.frequency === "once" && chore.status === "done") return; // already completed
+
+  if (chore.frequency === "once") {
     await supabase
       .from("chores")
       .update({ status: "done", last_completed_at: new Date().toISOString() })
@@ -54,7 +57,19 @@ export async function completeChore(formData: FormData) {
       .eq("id", id);
   }
 
+  // Logged separately from chores.status since recurring chores don't stay "done" -- this is
+  // the durable record used to total up points earned for the rewards balance.
+  if (chore.points > 0 && chore.assigned_member_id) {
+    await supabase.from("chore_completions").insert({
+      household_id: household.householdId,
+      chore_id: chore.id,
+      member_id: chore.assigned_member_id,
+      points: chore.points,
+    });
+  }
+
   revalidatePath("/chores");
+  revalidatePath("/dashboard");
 }
 
 export async function deleteChore(formData: FormData) {

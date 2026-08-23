@@ -175,6 +175,41 @@ create table if not exists chores (
 -- Adds assigned_member_id to chores for installs that ran an earlier version of this script.
 alter table chores add column if not exists assigned_member_id uuid references household_members(id) on delete set null;
 
+-- Durable log of completed chores and the points they earned -- chores.status flips back to
+-- 'open' immediately for recurring chores, so it can't be used to total up points earned.
+create table if not exists chore_completions (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  chore_id uuid references chores(id) on delete set null,
+  member_id uuid not null references household_members(id) on delete cascade,
+  points integer not null default 0,
+  completed_at timestamptz not null default now()
+);
+
+-- Parent-defined catalog of things kids can redeem points for (extra screen time, allowance, etc).
+create table if not exists rewards (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  name text not null,
+  cost integer not null check (cost > 0),
+  created_at timestamptz not null default now()
+);
+
+-- A kid's request to redeem a reward. reward_name/cost are snapshotted at request time so
+-- editing or removing a reward later doesn't change the meaning of past redemptions.
+create table if not exists reward_redemptions (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  reward_id uuid references rewards(id) on delete set null,
+  reward_name text not null,
+  member_id uuid not null references household_members(id) on delete cascade,
+  cost integer not null,
+  status text not null default 'pending' check (status in ('pending', 'approved')),
+  requested_at timestamptz not null default now(),
+  decided_at timestamptz,
+  decided_by uuid references auth.users(id)
+);
+
 -- ============================================================================
 -- House maintenance
 -- ============================================================================
@@ -414,6 +449,9 @@ alter table family_profiles enable row level security;
 alter table emergency_contacts enable row level security;
 alter table calendar_events enable row level security;
 alter table chores enable row level security;
+alter table chore_completions enable row level security;
+alter table rewards enable row level security;
+alter table reward_redemptions enable row level security;
 alter table maintenance_tasks enable row level security;
 alter table grocery_items enable row level security;
 alter table documents enable row level security;
@@ -465,6 +503,7 @@ declare
   t text;
   tables text[] := array[
     'family_profiles', 'emergency_contacts', 'calendar_events', 'chores',
+    'chore_completions', 'rewards', 'reward_redemptions',
     'maintenance_tasks', 'grocery_items', 'documents',
     'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
     'roundup_settings', 'roundup_purchases', 'roundup_payouts'
