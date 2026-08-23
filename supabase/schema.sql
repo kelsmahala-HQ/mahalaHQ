@@ -274,6 +274,20 @@ create table if not exists bill_payments (
   created_at timestamptz not null default now()
 );
 
+-- Moves a single bill occurrence to a different pay-period week than its due-date math would
+-- naturally place it in (e.g. a bill due the 4th that's actually paid whenever an earlier
+-- paycheck lands) -- the bill's own recurrence is untouched, so future cycles revert unless
+-- moved again.
+create table if not exists bill_reschedules (
+  id uuid primary key default gen_random_uuid(),
+  bill_id uuid not null references bills(id) on delete cascade,
+  household_id uuid not null references households(id) on delete cascade,
+  original_due_date date not null,
+  moved_to_week_start date not null,
+  created_at timestamptz not null default now(),
+  unique (bill_id, original_due_date)
+);
+
 -- ============================================================================
 -- Debts (tracking only -- no automated payments; see README)
 -- ============================================================================
@@ -405,6 +419,7 @@ alter table debts enable row level security;
 alter table debt_payments enable row level security;
 alter table bills enable row level security;
 alter table bill_payments enable row level security;
+alter table bill_reschedules enable row level security;
 alter table roundup_settings enable row level security;
 alter table roundup_purchases enable row level security;
 alter table roundup_payouts enable row level security;
@@ -447,7 +462,7 @@ declare
   tables text[] := array[
     'family_profiles', 'emergency_contacts', 'calendar_events', 'chores',
     'maintenance_tasks', 'grocery_items', 'documents',
-    'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments',
+    'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
     'roundup_settings', 'roundup_purchases', 'roundup_payouts'
   ];
 begin

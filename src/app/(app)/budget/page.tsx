@@ -1,119 +1,33 @@
-import { addMonths, addWeeks, addYears, endOfWeek, format, startOfWeek } from "date-fns";
+import Link from "next/link";
+import { addWeeks, endOfWeek, format, startOfWeek, subWeeks } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
-import { Card, EmptyState, PageHeader, iconButtonClass, inputClass } from "@/components/ui";
-import { deleteBill, deleteBillPayment, markBillPaid, updateBill } from "./actions";
-import AddBillForm from "./add-bill-form";
-
-const CATEGORIES = [
-  "Income",
-  "Personal",
-  "Utility",
-  "House",
-  "Credit Card",
-  "Groceries",
-  "Transportation",
-  "Loan",
-  "Savings",
-  "Child Support",
-  "Subscriptions",
-  "Sinking Fund",
-  "Other",
-];
-
-const FREQUENCY_LABELS: Record<string, string> = {
-  once: "One-time",
-  weekly: "Weekly",
-  biweekly: "Bi-weekly",
-  monthly: "Monthly",
-  quarterly: "Quarterly",
-  semiannual: "Every 6 months",
-  yearly: "Yearly",
-};
-
-// Pay periods run Friday -> Thursday: payday is the FIRST day of the period, so that
-// Friday's paycheck funds everything due from that Friday through the following Thursday.
-const PAY_PERIOD_OPTS = { weekStartsOn: 5 as const };
+import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { PAY_PERIOD_OPTS, applyReschedules, occurrenceInPeriod } from "@/lib/pay-period";
+import { markBillPaid, deleteBillPayment, rescheduleBillOccurrence, undoReschedule } from "./actions";
+import PaidCheckbox from "./paid-checkbox";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-function advance(date: Date, frequency: string): Date {
-  switch (frequency) {
-    case "weekly":
-      return addWeeks(date, 1);
-    case "biweekly":
-      return addWeeks(date, 2);
-    case "monthly":
-      return addMonths(date, 1);
-    case "quarterly":
-      return addMonths(date, 3);
-    case "semiannual":
-      return addMonths(date, 6);
-    case "yearly":
-      return addYears(date, 1);
-    default:
-      return date; // 'once'
-  }
-}
-
-function regress(date: Date, frequency: string): Date {
-  switch (frequency) {
-    case "weekly":
-      return addWeeks(date, -1);
-    case "biweekly":
-      return addWeeks(date, -2);
-    case "monthly":
-      return addMonths(date, -1);
-    case "quarterly":
-      return addMonths(date, -3);
-    case "semiannual":
-      return addMonths(date, -6);
-    case "yearly":
-      return addYears(date, -1);
-    default:
-      return date; // 'once'
-  }
-}
-
-/** Finds the single occurrence date of this bill that lands within [periodStart, periodEnd], if any. */
-function occurrenceInPeriod(bill: { due_date: string; frequency: string }, periodStart: Date, periodEnd: Date): Date | null {
-  if (bill.frequency === "once") {
-    const d = new Date(`${bill.due_date}T00:00:00`);
-    return d >= periodStart && d <= periodEnd ? d : null;
-  }
-
-  let occurrence = new Date(`${bill.due_date}T00:00:00`);
-  let guard = 0;
-
-  // The anchor is just "a" occurrence, not necessarily the first ever — walk backward past
-  // it if it's in a later period (e.g. a biweekly paycheck anchored a few weeks out still had
-  // an occurrence land in this period), then forward to the first one in range.
-  while (occurrence > periodEnd && guard < 500) {
-    occurrence = regress(occurrence, bill.frequency);
-    guard++;
-  }
-  guard = 0;
-  while (occurrence < periodStart && guard < 500) {
-    occurrence = advance(occurrence, bill.frequency);
-    guard++;
-  }
-
-  return occurrence >= periodStart && occurrence <= periodEnd ? occurrence : null;
-}
-
-export default async function BudgetPage() {
+export default async function BudgetPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ week?: string }>;
+}) {
   const household = await requireAdult();
   const supabase = await createClient();
+  const { week } = await searchParams;
 
-  const now = new Date();
-  const periodStartDate = startOfWeek(now, PAY_PERIOD_OPTS);
-  const periodEndDate = endOfWeek(now, PAY_PERIOD_OPTS);
+  const anchor = week ? new Date(`${week}T00:00:00`) : new Date();
+  const periodStartDate = startOfWeek(anchor, PAY_PERIOD_OPTS);
+  const periodEndDate = endOfWeek(anchor, PAY_PERIOD_OPTS);
   const periodStart = format(periodStartDate, "yyyy-MM-dd");
   const periodEnd = format(periodEndDate, "yyyy-MM-dd");
+  const isCurrentWeek = periodStart === format(startOfWeek(new Date(), PAY_PERIOD_OPTS), "yyyy-MM-dd");
 
-  const [{ data: bills }, { data: payments }] = await Promise.all([
+  const [{ data: bills }, { data: payments }, { data: reschedules }] = await Promise.all([
     supabase.from("bills").select("*").eq("household_id", household.householdId).order("due_date"),
     supabase
       .from("bill_payments")
@@ -121,40 +35,63 @@ export default async function BudgetPage() {
       .eq("household_id", household.householdId)
       .gte("paid_on", periodStart)
       .lte("paid_on", periodEnd),
+    supabase.from("bill_reschedules").select("*").eq("household_id", household.householdId),
   ]);
 
-  const paidByBill = new Map<string, { id: string; amount: number; paid_on: string }>();
-  for (const p of payments ?? []) paidByBill.set(p.bill_id, { id: p.id, amount: Number(p.amount), paid_on: p.paid_on });
+  const paidByBill = new Map<string, { id: string; amount: number }>();
+  for (const p of payments ?? []) paidByBill.set(p.bill_id, { id: p.id, amount: Number(p.amount) });
 
-  const billsThisPeriod = (bills ?? [])
+  const naturalThisPeriod = (bills ?? [])
     .map((b) => ({ ...b, occurrence: occurrenceInPeriod(b, periodStartDate, periodEndDate) }))
-    .filter((b) => b.occurrence !== null)
-    .sort((a, b) => a.occurrence!.getTime() - b.occurrence!.getTime());
+    .filter((b): b is typeof b & { occurrence: Date } => b.occurrence !== null);
+
+  const billsThisPeriod = applyReschedules(bills ?? [], naturalThisPeriod, reschedules ?? [], periodStartDate).sort(
+    (a, b) => a.occurrence.getTime() - b.occurrence.getTime()
+  );
+
+  const incomeBills = billsThisPeriod.filter((b) => b.type === "income");
+  const expenseBills = billsThisPeriod.filter((b) => b.type === "expense");
 
   let totalIncome = 0;
   let totalExpense = 0;
-  let plannedIncome = 0;
-  let plannedExpense = 0;
   for (const b of billsThisPeriod) {
     const paid = paidByBill.get(b.id);
-    if (b.type === "income") {
-      plannedIncome += Number(b.amount);
-      if (paid) totalIncome += paid.amount;
-    } else {
-      plannedExpense += Number(b.amount);
-      if (paid) totalExpense += paid.amount;
-    }
+    if (!paid) continue;
+    if (b.type === "income") totalIncome += paid.amount;
+    else totalExpense += paid.amount;
   }
-  const unallocated = plannedIncome - plannedExpense;
+  const remaining = totalIncome - totalExpense;
+
+  const prevWeek = format(subWeeks(periodStartDate, 1), "yyyy-MM-dd");
+  const nextWeek = format(addWeeks(periodStartDate, 1), "yyyy-MM-dd");
 
   return (
     <div>
-      <PageHeader
-        title="Budget"
-        subtitle={`This pay period: ${format(periodStartDate, "MMM d")} – ${format(periodEndDate, "MMM d, yyyy")} (Fri–Thu, funded by that Friday's paycheck)`}
-      />
+      <PageHeader title="Budget" subtitle="Fri–Thu pay periods, funded by that Friday's paycheck." />
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
+      <Card className="mb-6">
+        <div className="mb-3 flex items-center justify-between">
+          <Link href={`/budget?week=${prevWeek}`} className="text-sm font-semibold text-slate-500 hover:text-teal-600">
+            ← Prev week
+          </Link>
+          <h2 className="text-base font-bold text-slate-900">
+            {format(periodStartDate, "MMM d")} – {format(periodEndDate, "MMM d, yyyy")}
+          </h2>
+          <Link href={`/budget?week=${nextWeek}`} className="text-sm font-semibold text-slate-500 hover:text-teal-600">
+            Next week →
+          </Link>
+        </div>
+        <div className="flex gap-4 text-sm">
+          <Link href="/budget/month" className="font-semibold text-teal-600 hover:underline">
+            View month →
+          </Link>
+          <Link href="/budget/manage" className="font-semibold text-teal-600 hover:underline">
+            Manage bills →
+          </Link>
+        </div>
+      </Card>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <p className="text-xs font-medium uppercase text-slate-400">Income</p>
           <p className="mt-1 text-2xl font-semibold text-teal-600">{currency(totalIncome)}</p>
@@ -163,141 +100,74 @@ export default async function BudgetPage() {
           <p className="text-xs font-medium uppercase text-slate-400">Expenses</p>
           <p className="mt-1 text-2xl font-semibold text-red-600">{currency(totalExpense)}</p>
         </Card>
-        <Card>
-          <p className="text-xs font-medium uppercase text-slate-400">Net</p>
-          <p className="mt-1 text-2xl font-semibold text-slate-900">{currency(totalIncome - totalExpense)}</p>
-        </Card>
-        <Card className={unallocated < 0 ? "!bg-red-50" : "!bg-yellow-50"}>
-          <p className="text-xs font-medium uppercase text-slate-400">Unallocated</p>
-          <p className={`mt-1 text-2xl font-semibold ${unallocated < 0 ? "text-red-600" : "text-slate-900"}`}>
-            {currency(unallocated)}
+        <Card className={remaining < 0 ? "!bg-red-50" : "!bg-yellow-50"}>
+          <p className="text-xs font-medium uppercase text-slate-400">Remaining</p>
+          <p className={`mt-1 text-2xl font-semibold ${remaining < 0 ? "text-red-600" : "text-slate-900"}`}>
+            {currency(remaining)}
           </p>
-          <p className="mt-0.5 text-xs text-slate-400">Planned income minus planned bills, this period</p>
         </Card>
       </div>
 
-      <Card className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a bill</h2>
-        <AddBillForm todayStr={format(now, "yyyy-MM-dd")} />
+      <Card>
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">Income</h2>
+        {!incomeBills.length ? (
+          <EmptyState message="No income due this week." />
+        ) : (
+          <div className="space-y-2">
+            {incomeBills.map((b) => (
+              <PaidCheckbox
+                key={b.id}
+                billId={b.id}
+                name={b.name}
+                category={b.category}
+                amount={Number(b.amount)}
+                naturalDueDate={format(b.occurrence, "yyyy-MM-dd")}
+                weekStart={periodStart}
+                isIncome
+                moved={b.moved}
+                paid={paidByBill.get(b.id) ?? null}
+                markBillPaid={markBillPaid}
+                deleteBillPayment={deleteBillPayment}
+                rescheduleBillOccurrence={rescheduleBillOccurrence}
+                undoReschedule={undoReschedule}
+              />
+            ))}
+          </div>
+        )}
+
+        <h2 className="mb-3 mt-6 text-xs font-bold uppercase tracking-wide text-slate-400">Expenses</h2>
+        {!expenseBills.length ? (
+          <EmptyState message="No expenses due this week." />
+        ) : (
+          <div className="space-y-2">
+            {expenseBills.map((b) => (
+              <PaidCheckbox
+                key={b.id}
+                billId={b.id}
+                name={b.name}
+                category={b.category}
+                amount={Number(b.amount)}
+                naturalDueDate={format(b.occurrence, "yyyy-MM-dd")}
+                weekStart={periodStart}
+                isIncome={false}
+                moved={b.moved}
+                paid={paidByBill.get(b.id) ?? null}
+                markBillPaid={markBillPaid}
+                deleteBillPayment={deleteBillPayment}
+                rescheduleBillOccurrence={rescheduleBillOccurrence}
+                undoReschedule={undoReschedule}
+              />
+            ))}
+          </div>
+        )}
       </Card>
 
-      <h2 className="mb-3 text-sm font-semibold text-slate-700">This period</h2>
-      {!billsThisPeriod.length ? (
-        <EmptyState message="No bills due this pay period." />
-      ) : (
-        <div className="mb-8 space-y-2">
-          {billsThisPeriod.map((b) => {
-            const paid = paidByBill.get(b.id);
-            return (
-              <Card key={b.id} className="flex flex-wrap items-center justify-between gap-2 !p-4">
-                <div>
-                  <p className="font-medium text-slate-900">
-                    {b.name}{" "}
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-500">{b.category}</span>
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {currency(Number(b.amount))} · due {format(b.occurrence!, "MMM d")}
-                    {b.assigned_to ? ` · ${b.assigned_to}` : ""}
-                  </p>
-                </div>
-                {paid ? (
-                  <form action={deleteBillPayment} className="flex items-center gap-2">
-                    <span className="rounded-full bg-teal-100 px-2 py-1 text-xs font-medium text-teal-800">
-                      ✅ Paid {currency(paid.amount)} on {paid.paid_on}
-                    </span>
-                    <input type="hidden" name="id" value={paid.id} />
-                    <button className="text-xs text-slate-400 hover:text-red-600">Undo</button>
-                  </form>
-                ) : (
-                  <form action={markBillPaid} className="flex flex-wrap items-center gap-2">
-                    <input type="hidden" name="bill_id" value={b.id} />
-                    <input
-                      name="amount"
-                      type="number"
-                      step="0.01"
-                      defaultValue={b.amount}
-                      className={`${inputClass} w-24 !py-1 text-sm`}
-                    />
-                    <input
-                      name="paid_on"
-                      type="date"
-                      defaultValue={format(b.occurrence!, "yyyy-MM-dd")}
-                      className={`${inputClass} w-40 !py-1 text-sm`}
-                    />
-                    <button type="submit" className="rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-100">
-                      Mark {b.type === "income" ? "Received" : "Paid"}
-                    </button>
-                  </form>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      <h2 className="mb-3 text-sm font-semibold text-slate-700">All bills</h2>
-      {!bills?.length ? (
-        <EmptyState message="No bills set up yet — add one above." />
-      ) : (
-        <div className="space-y-2">
-          {bills.map((b) => (
-            <Card key={b.id} className="!p-4">
-              <form action={updateBill} className="flex flex-wrap items-center justify-between gap-2">
-                <input type="hidden" name="id" value={b.id} />
-                <input
-                  name="name"
-                  defaultValue={b.name}
-                  className={`${inputClass} w-40 !py-1 text-sm font-medium`}
-                />
-                <select name="category" defaultValue={b.category} className={`${inputClass} w-32 !py-1 text-sm`}>
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  name="amount"
-                  type="number"
-                  step="0.01"
-                  defaultValue={b.amount}
-                  className={`${inputClass} w-24 !py-1 text-sm`}
-                />
-                <input
-                  name="assigned_to"
-                  defaultValue={b.assigned_to ?? ""}
-                  placeholder="Who"
-                  className={`${inputClass} w-28 !py-1 text-sm`}
-                />
-                <select name="frequency" defaultValue={b.frequency} className={`${inputClass} w-32 !py-1 text-sm`}>
-                  {Object.entries(FREQUENCY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <div>
-                  <label className="mb-1 block text-xs text-slate-400">Due date</label>
-                  <input
-                    name="due_date"
-                    type="date"
-                    defaultValue={b.due_date}
-                    className={`${inputClass} w-40 !py-1 text-sm`}
-                  />
-                </div>
-                <div className="ml-auto flex gap-2">
-                  <button type="submit" className="rounded-lg bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
-                    Save
-                  </button>
-                </div>
-              </form>
-              <form action={deleteBill} className="mt-1">
-                <input type="hidden" name="id" value={b.id} />
-                <button className={iconButtonClass}>Remove</button>
-              </form>
-            </Card>
-          ))}
-        </div>
+      {!isCurrentWeek && (
+        <p className="mt-4 text-center text-xs text-slate-400">
+          <Link href="/budget" className="font-medium text-teal-600 hover:underline">
+            Jump back to this week
+          </Link>
+        </p>
       )}
     </div>
   );

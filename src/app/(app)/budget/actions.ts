@@ -1,8 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { startOfWeek, format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
+import { PAY_PERIOD_OPTS } from "@/lib/pay-period";
+
+function revalidateBudget() {
+  revalidatePath("/budget");
+  revalidatePath("/budget/month");
+  revalidatePath("/calendar");
+}
 
 export async function addBill(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
@@ -40,8 +48,8 @@ export async function addBill(formData: FormData): Promise<{ error: string } | {
     if (paymentError) return { error: paymentError.message };
   }
 
-  revalidatePath("/budget");
-  revalidatePath("/calendar");
+  revalidateBudget();
+  revalidatePath("/budget/manage");
   return { success: true };
 }
 
@@ -62,17 +70,16 @@ export async function updateBill(formData: FormData) {
     })
     .eq("id", id);
 
-  revalidatePath("/budget");
-  revalidatePath("/calendar");
-  revalidatePath("/calendar");
+  revalidateBudget();
+  revalidatePath("/budget/manage");
 }
 
 export async function deleteBill(formData: FormData) {
   await requireHousehold();
   const supabase = await createClient();
   await supabase.from("bills").delete().eq("id", formData.get("id") as string);
-  revalidatePath("/budget");
-  revalidatePath("/calendar");
+  revalidateBudget();
+  revalidatePath("/budget/manage");
 }
 
 export async function markBillPaid(formData: FormData) {
@@ -86,12 +93,44 @@ export async function markBillPaid(formData: FormData) {
     paid_on: (formData.get("paid_on") as string) || new Date().toISOString().slice(0, 10),
   });
 
-  revalidatePath("/budget");
+  revalidateBudget();
 }
 
 export async function deleteBillPayment(formData: FormData) {
   await requireHousehold();
   const supabase = await createClient();
   await supabase.from("bill_payments").delete().eq("id", formData.get("id") as string);
-  revalidatePath("/budget");
+  revalidateBudget();
+}
+
+/** Moves a single bill occurrence to a different pay-period week, leaving its recurrence untouched. */
+export async function rescheduleBillOccurrence(formData: FormData) {
+  const household = await requireHousehold();
+  const supabase = await createClient();
+
+  const billId = formData.get("bill_id") as string;
+  const originalDueDate = formData.get("original_due_date") as string;
+  const targetDate = formData.get("target_date") as string;
+  const movedToWeekStart = format(startOfWeek(new Date(`${targetDate}T00:00:00`), PAY_PERIOD_OPTS), "yyyy-MM-dd");
+
+  await supabase.from("bill_reschedules").upsert(
+    {
+      bill_id: billId,
+      household_id: household.householdId,
+      original_due_date: originalDueDate,
+      moved_to_week_start: movedToWeekStart,
+    },
+    { onConflict: "bill_id,original_due_date" }
+  );
+
+  revalidateBudget();
+}
+
+export async function undoReschedule(formData: FormData) {
+  await requireHousehold();
+  const supabase = await createClient();
+  const billId = formData.get("bill_id") as string;
+  const originalDueDate = formData.get("original_due_date") as string;
+  await supabase.from("bill_reschedules").delete().eq("bill_id", billId).eq("original_due_date", originalDueDate);
+  revalidateBudget();
 }

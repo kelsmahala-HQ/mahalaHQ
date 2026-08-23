@@ -1,78 +1,14 @@
 import Link from "next/link";
-import { addMonths, addWeeks, addYears, endOfWeek, format, startOfWeek } from "date-fns";
+import { endOfWeek, format, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, PageHeader } from "@/components/ui";
+import { PAY_PERIOD_OPTS, applyReschedules, occurrenceInPeriod } from "@/lib/pay-period";
 import KidDashboard from "./kid-dashboard";
 import SitterDashboard from "./sitter-dashboard";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-}
-
-// Pay periods run Friday -> Thursday, matching the Budget page.
-const PAY_PERIOD_OPTS = { weekStartsOn: 5 as const };
-
-function advanceBill(date: Date, frequency: string): Date {
-  switch (frequency) {
-    case "weekly":
-      return addWeeks(date, 1);
-    case "biweekly":
-      return addWeeks(date, 2);
-    case "monthly":
-      return addMonths(date, 1);
-    case "quarterly":
-      return addMonths(date, 3);
-    case "semiannual":
-      return addMonths(date, 6);
-    case "yearly":
-      return addYears(date, 1);
-    default:
-      return date; // 'once'
-  }
-}
-
-function regressBill(date: Date, frequency: string): Date {
-  switch (frequency) {
-    case "weekly":
-      return addWeeks(date, -1);
-    case "biweekly":
-      return addWeeks(date, -2);
-    case "monthly":
-      return addMonths(date, -1);
-    case "quarterly":
-      return addMonths(date, -3);
-    case "semiannual":
-      return addMonths(date, -6);
-    case "yearly":
-      return addYears(date, -1);
-    default:
-      return date; // 'once'
-  }
-}
-
-/** The anchor is just "a" occurrence, not necessarily the first ever — walk backward past it if
- *  it's in a later period, then forward to the first occurrence in range. Matches Budget page. */
-function occurrenceInPeriod(bill: { due_date: string; frequency: string }, periodStart: Date, periodEnd: Date): Date | null {
-  if (bill.frequency === "once") {
-    const d = new Date(`${bill.due_date}T00:00:00`);
-    return d >= periodStart && d <= periodEnd ? d : null;
-  }
-
-  let occurrence = new Date(`${bill.due_date}T00:00:00`);
-  let guard = 0;
-
-  while (occurrence > periodEnd && guard < 500) {
-    occurrence = regressBill(occurrence, bill.frequency);
-    guard++;
-  }
-  guard = 0;
-  while (occurrence < periodStart && guard < 500) {
-    occurrence = advanceBill(occurrence, bill.frequency);
-    guard++;
-  }
-
-  return occurrence >= periodStart && occurrence <= periodEnd ? occurrence : null;
 }
 
 export default async function DashboardPage() {
@@ -97,6 +33,7 @@ export default async function DashboardPage() {
     { data: debts },
     { data: bills },
     { data: billPayments },
+    { data: reschedules },
     { data: roundupSettings },
     { data: focusDebt },
     { data: roundupPurchases },
@@ -136,6 +73,10 @@ export default async function DashboardPage() {
       .eq("household_id", household.householdId)
       .gte("paid_on", periodStart)
       .lte("paid_on", periodEnd),
+    supabase
+      .from("bill_reschedules")
+      .select("bill_id, original_due_date, moved_to_week_start")
+      .eq("household_id", household.householdId),
     supabase.from("roundup_settings").select("*").eq("household_id", household.householdId).maybeSingle(),
     supabase
       .from("debts")
@@ -150,10 +91,12 @@ export default async function DashboardPage() {
   const totalDebt = (debts ?? []).reduce((sum, d) => sum + Number(d.current_balance), 0);
 
   const paidBillIds = new Set((billPayments ?? []).map((p) => p.bill_id));
-  const billsThisPeriod = (bills ?? [])
+  const naturalThisPeriod = (bills ?? [])
     .map((b) => ({ ...b, occurrence: occurrenceInPeriod(b, periodStartDate, periodEndDate) }))
-    .filter((b) => b.occurrence !== null)
-    .sort((a, b) => a.occurrence!.getTime() - b.occurrence!.getTime());
+    .filter((b): b is typeof b & { occurrence: Date } => b.occurrence !== null);
+  const billsThisPeriod = applyReschedules(bills ?? [], naturalThisPeriod, reschedules ?? [], periodStartDate).sort(
+    (a, b) => a.occurrence.getTime() - b.occurrence.getTime()
+  );
   const plannedIncome = billsThisPeriod.filter((b) => b.type === "income").reduce((sum, b) => sum + Number(b.amount), 0);
   const plannedExpense = billsThisPeriod.filter((b) => b.type === "expense").reduce((sum, b) => sum + Number(b.amount), 0);
   const unallocated = plannedIncome - plannedExpense;
