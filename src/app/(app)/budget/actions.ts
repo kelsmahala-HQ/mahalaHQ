@@ -56,11 +56,14 @@ export async function updateBill(formData: FormData) {
       name: formData.get("name") as string,
       category: (formData.get("category") as string) || "Other",
       amount: Number(formData.get("amount")),
+      frequency: (formData.get("frequency") as string) || "monthly",
+      due_date: formData.get("due_date") as string,
       assigned_to: (formData.get("assigned_to") as string) || null,
     })
     .eq("id", id);
 
   revalidatePath("/budget");
+  revalidatePath("/calendar");
   revalidatePath("/calendar");
 }
 

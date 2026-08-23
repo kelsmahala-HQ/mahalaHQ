@@ -58,20 +58,49 @@ function advance(date: Date, frequency: string): Date {
   }
 }
 
+function regress(date: Date, frequency: string): Date {
+  switch (frequency) {
+    case "weekly":
+      return addWeeks(date, -1);
+    case "biweekly":
+      return addWeeks(date, -2);
+    case "monthly":
+      return addMonths(date, -1);
+    case "quarterly":
+      return addMonths(date, -3);
+    case "semiannual":
+      return addMonths(date, -6);
+    case "yearly":
+      return addYears(date, -1);
+    default:
+      return date; // 'once'
+  }
+}
+
 /** Finds the single occurrence date of this bill that lands within [periodStart, periodEnd], if any. */
 function occurrenceInPeriod(bill: { due_date: string; frequency: string }, periodStart: Date, periodEnd: Date): Date | null {
   if (bill.frequency === "once") {
     const d = new Date(`${bill.due_date}T00:00:00`);
     return d >= periodStart && d <= periodEnd ? d : null;
   }
+
   let occurrence = new Date(`${bill.due_date}T00:00:00`);
   let guard = 0;
-  while (occurrence <= periodEnd && guard < 500) {
-    if (occurrence >= periodStart) return occurrence;
+
+  // The anchor is just "a" occurrence, not necessarily the first ever — walk backward past
+  // it if it's in a later period (e.g. a biweekly paycheck anchored a few weeks out still had
+  // an occurrence land in this period), then forward to the first one in range.
+  while (occurrence > periodEnd && guard < 500) {
+    occurrence = regress(occurrence, bill.frequency);
+    guard++;
+  }
+  guard = 0;
+  while (occurrence < periodStart && guard < 500) {
     occurrence = advance(occurrence, bill.frequency);
     guard++;
   }
-  return null;
+
+  return occurrence >= periodStart && occurrence <= periodEnd ? occurrence : null;
 }
 
 export default async function BudgetPage() {
@@ -240,9 +269,22 @@ export default async function BudgetPage() {
                   placeholder="Who"
                   className={`${inputClass} w-28 !py-1 text-sm`}
                 />
-                <span className="text-xs text-slate-400">
-                  {FREQUENCY_LABELS[b.frequency]} · anchor {b.due_date}
-                </span>
+                <select name="frequency" defaultValue={b.frequency} className={`${inputClass} w-32 !py-1 text-sm`}>
+                  {Object.entries(FREQUENCY_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">Due date</label>
+                  <input
+                    name="due_date"
+                    type="date"
+                    defaultValue={b.due_date}
+                    className={`${inputClass} w-40 !py-1 text-sm`}
+                  />
+                </div>
                 <div className="ml-auto flex gap-2">
                   <button type="submit" className="rounded-lg bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
                     Save

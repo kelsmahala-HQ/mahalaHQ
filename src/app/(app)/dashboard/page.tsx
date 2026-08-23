@@ -32,19 +32,47 @@ function advanceBill(date: Date, frequency: string): Date {
   }
 }
 
+function regressBill(date: Date, frequency: string): Date {
+  switch (frequency) {
+    case "weekly":
+      return addWeeks(date, -1);
+    case "biweekly":
+      return addWeeks(date, -2);
+    case "monthly":
+      return addMonths(date, -1);
+    case "quarterly":
+      return addMonths(date, -3);
+    case "semiannual":
+      return addMonths(date, -6);
+    case "yearly":
+      return addYears(date, -1);
+    default:
+      return date; // 'once'
+  }
+}
+
+/** The anchor is just "a" occurrence, not necessarily the first ever — walk backward past it if
+ *  it's in a later period, then forward to the first occurrence in range. Matches Budget page. */
 function occurrenceInPeriod(bill: { due_date: string; frequency: string }, periodStart: Date, periodEnd: Date): Date | null {
   if (bill.frequency === "once") {
     const d = new Date(`${bill.due_date}T00:00:00`);
     return d >= periodStart && d <= periodEnd ? d : null;
   }
+
   let occurrence = new Date(`${bill.due_date}T00:00:00`);
   let guard = 0;
-  while (occurrence <= periodEnd && guard < 500) {
-    if (occurrence >= periodStart) return occurrence;
+
+  while (occurrence > periodEnd && guard < 500) {
+    occurrence = regressBill(occurrence, bill.frequency);
+    guard++;
+  }
+  guard = 0;
+  while (occurrence < periodStart && guard < 500) {
     occurrence = advanceBill(occurrence, bill.frequency);
     guard++;
   }
-  return null;
+
+  return occurrence >= periodStart && occurrence <= periodEnd ? occurrence : null;
 }
 
 export default async function DashboardPage() {
