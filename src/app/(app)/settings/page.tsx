@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, PageHeader, inputClass } from "@/components/ui";
-import { updateMemberRole, updateOwnPhone } from "./actions";
+import { updateMemberPhone, updateMemberRole } from "./actions";
 import InviteEmailForm from "./invite-email-form";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -64,13 +64,14 @@ export default async function SettingsPage() {
                 </div>
 
                 <div className="mt-2">
-                  {isSelf ? (
-                    <form action={updateOwnPhone} className="flex items-center gap-2">
+                  {isSelf || household.role === "admin" ? (
+                    <form action={updateMemberPhone} className="flex items-center gap-2">
+                      <input type="hidden" name="member_id" value={m.id} />
                       <input
                         name="phone"
                         type="tel"
                         defaultValue={m.phone ?? ""}
-                        placeholder="Your phone number"
+                        placeholder={isSelf ? "Your phone number" : `${m.display_name}'s phone number`}
                         className={`${inputClass} w-48 !py-1 text-sm`}
                       />
                       <button type="submit" className="rounded-lg bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
