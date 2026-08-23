@@ -1,6 +1,6 @@
 import { endOfWeek, format, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { requireHousehold } from "@/lib/household";
+import { requireAdult } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { addCategory, addTransaction, deleteCategory, deleteTransaction } from "./actions";
 
@@ -9,7 +9,7 @@ function currency(n: number) {
 }
 
 export default async function BudgetPage() {
-  const household = await requireHousehold();
+  const household = await requireAdult();
   const supabase = await createClient();
 
   const now = new Date();

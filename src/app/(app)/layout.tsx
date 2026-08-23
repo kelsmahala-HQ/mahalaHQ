@@ -3,10 +3,11 @@ import { requireHousehold } from "@/lib/household";
 import SignOutButton from "./sign-out-button";
 import InviteCode from "./invite-code";
 import MobileNav from "./mobile-nav";
-import { DASHBOARD_LINK, NAV_GROUPS } from "./nav";
+import { DASHBOARD_LINK, navGroupsForRole } from "./nav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const household = await requireHousehold();
+  const navGroups = navGroupsForRole(household.role);
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -23,7 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span>{DASHBOARD_LINK.icon}</span>
             {DASHBOARD_LINK.label}
           </Link>
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label}>
               <p className="px-2 text-xs font-medium uppercase tracking-wide text-slate-400">{group.label}</p>
               <div className="mt-1 space-y-1">
@@ -42,7 +43,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
         <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
-          <InviteCode code={household.inviteCode} />
+          {household.role !== "kid" && (
+            <InviteCode code={household.inviteCode} householdName={household.householdName} />
+          )}
+          {household.role !== "kid" && (
+            <Link href="/settings" className="block px-2 text-xs font-medium text-slate-500 hover:text-teal-600">
+              ⚙️ Household members
+            </Link>
+          )}
           <p className="px-2 text-xs text-slate-400">Signed in as {household.displayName}</p>
           <SignOutButton />
         </div>
@@ -51,7 +59,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex-1">
         <header className="relative flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:hidden">
           <div className="flex items-center gap-2">
-            <MobileNav />
+            <MobileNav
+              navGroups={navGroups}
+              isKid={household.role === "kid"}
+              inviteCode={household.inviteCode}
+              householdName={household.householdName}
+            />
             <span className="font-semibold text-slate-900">{household.householdName}</span>
           </div>
           <SignOutButton />

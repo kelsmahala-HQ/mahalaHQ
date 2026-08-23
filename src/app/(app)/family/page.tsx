@@ -1,11 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
-import { requireHousehold } from "@/lib/household";
+import { requireAdult } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, inputClass } from "@/components/ui";
 import { addProfile, getAvatarUrl } from "./actions";
 import ProfileCard from "./profile-card";
 
 export default async function FamilyPage() {
-  const household = await requireHousehold();
+  const household = await requireAdult();
   const supabase = await createClient();
   const { data: profiles } = await supabase
     .from("family_profiles")

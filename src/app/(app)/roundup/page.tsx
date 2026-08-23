@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireHousehold } from "@/lib/household";
+import { requireAdult } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { calculateRoundUp } from "@/lib/roundup";
 import { addPurchase, sendPayout, updateSettings } from "./actions";
@@ -13,7 +13,7 @@ function currency(n: number) {
 }
 
 export default async function RoundupPage() {
-  const household = await requireHousehold();
+  const household = await requireAdult();
   const supabase = await createClient();
   const admin = createAdminClient();
 

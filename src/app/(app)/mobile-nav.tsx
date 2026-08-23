@@ -2,9 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { DASHBOARD_LINK, NAV_GROUPS } from "./nav";
+import { DASHBOARD_LINK, type NavGroup } from "./nav";
+import InviteCode from "./invite-code";
 
-export default function MobileNav() {
+export default function MobileNav({
+  navGroups,
+  isKid,
+  inviteCode,
+  householdName,
+}: {
+  navGroups: NavGroup[];
+  isKid: boolean;
+  inviteCode: string;
+  householdName: string;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -27,7 +38,7 @@ export default function MobileNav() {
             <span>{DASHBOARD_LINK.icon}</span>
             {DASHBOARD_LINK.label}
           </Link>
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label} className="mt-3">
               <p className="px-2 text-xs font-medium uppercase tracking-wide text-slate-400">{group.label}</p>
               <div className="mt-1 space-y-1">
@@ -45,6 +56,18 @@ export default function MobileNav() {
               </div>
             </div>
           ))}
+          {!isKid && (
+            <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+              <InviteCode code={inviteCode} householdName={householdName} />
+              <Link
+                href="/settings"
+                onClick={() => setOpen(false)}
+                className="block px-2 text-xs font-medium text-slate-500 hover:text-teal-600"
+              >
+                ⚙️ Household members
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>

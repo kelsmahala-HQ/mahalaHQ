@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { requireHousehold } from "@/lib/household";
+import { requireAdult } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { addTask, deleteTask, markDone } from "./actions";
 
 export default async function MaintenancePage() {
-  const household = await requireHousehold();
+  const household = await requireAdult();
   const supabase = await createClient();
   const { data: tasks } = await supabase
     .from("maintenance_tasks")

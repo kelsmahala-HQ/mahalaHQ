@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { requireHousehold } from "@/lib/household";
+import { requireAdult } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { addDebt, deleteDebt, logPayment, setFocusDebt } from "./actions";
 
@@ -9,7 +9,7 @@ function currency(n: number) {
 }
 
 export default async function DebtsPage() {
-  const household = await requireHousehold();
+  const household = await requireAdult();
   const supabase = await createClient();
   const { data: debts } = await supabase
     .from("debts")

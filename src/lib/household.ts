@@ -44,3 +44,10 @@ export async function requireHousehold(): Promise<CurrentHousehold> {
     userId: user.id,
   };
 }
+
+/** Same as requireHousehold(), but bounces kid accounts to the dashboard — use on adult-only pages. */
+export async function requireAdult(): Promise<CurrentHousehold> {
+  const household = await requireHousehold();
+  if (household.role === "kid") redirect("/dashboard");
+  return household;
+}
