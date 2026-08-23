@@ -39,13 +39,14 @@ Open [http://localhost:3000](http://localhost:3000). Sign up, then create a hous
 
 ## 4. Deploy so the whole family can use it
 
-1. Push this repo to GitHub.
-2. Import it into [Vercel](https://vercel.com) (free tier).
-3. Add the same two environment variables from step 2 in the Vercel project settings.
-4. Deploy.
-5. In Vercel's project **Domains** settings, add **MahalaHQ.org** (and `www.MahalaHQ.org` if you want both) and follow Vercel's DNS instructions at your domain registrar.
+This repo deploys to [Netlify](https://netlify.com), which auto-detects Next.js and builds it with zero config (a `netlify.toml` pins the Node version it needs).
 
-Once deployed, everyone in the household can sign in from their phone or laptop at that URL.
+1. In Netlify: **Add new site > Import an existing project**, and pick the `family-portal` GitHub repo.
+2. Leave the build settings as detected (build command `npm run build`) and deploy once so the site exists.
+3. In **Site configuration > Environment variables**, add the same two variables from step 2 (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`), then trigger a redeploy so the build picks them up.
+4. In **Site configuration > Domain management**, add **MahalaHQ.org** as a custom domain and follow Netlify's DNS instructions at your domain registrar (either point nameservers at Netlify DNS, or add the A/CNAME records it gives you).
+
+Once DNS propagates, everyone in the household can sign in from their phone or laptop at `MahalaHQ.org`.
 
 ## Project structure
 
