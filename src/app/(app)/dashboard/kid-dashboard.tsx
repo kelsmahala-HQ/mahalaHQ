@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { CurrentHousehold } from "@/lib/household";
 import { completeChore } from "../chores/actions";
+import { wallClockDate } from "@/lib/wall-clock";
 
 export default async function KidDashboard({ household }: { household: CurrentHousehold }) {
   const supabase = await createClient();
@@ -108,7 +109,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
               <div key={e.id} className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm">
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
                 <span className="text-sm text-slate-400">
-                  {new Date(e.start_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  {wallClockDate(e.start_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                 </span>
                 <span className="text-sm font-medium text-slate-900">{e.title}</span>
               </div>

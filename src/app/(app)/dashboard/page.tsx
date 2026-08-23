@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, PageHeader } from "@/components/ui";
 import { PAY_PERIOD_OPTS, applyReschedules, occurrenceInPeriod } from "@/lib/pay-period";
+import { wallClockDate } from "@/lib/wall-clock";
 import KidDashboard from "./kid-dashboard";
 import SitterDashboard from "./sitter-dashboard";
 
@@ -152,7 +153,7 @@ export default async function DashboardPage() {
                 <li key={e.id} className="flex items-center gap-2 text-sm">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
                   <span className="text-slate-400">
-                    {new Date(e.start_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                    {wallClockDate(e.start_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                   </span>
                   <span className="text-slate-900">{e.title}</span>
                 </li>

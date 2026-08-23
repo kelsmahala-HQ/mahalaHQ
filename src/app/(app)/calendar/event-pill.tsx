@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { format } from "date-fns";
 import { buttonClass, inputClass } from "@/components/ui";
+import { wallClockDate } from "@/lib/wall-clock";
 
 type EventData = {
   id: string;
@@ -33,7 +34,7 @@ export default function EventPill({ event, icon, deleteEvent, updateEvent }: Pro
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const anchor = new Date(event.anchorStartAt);
+  const anchor = wallClockDate(event.anchorStartAt);
   const dateStr = format(anchor, "yyyy-MM-dd");
   const timeStr = event.all_day ? "" : format(anchor, "HH:mm");
 
@@ -68,7 +69,7 @@ export default function EventPill({ event, icon, deleteEvent, updateEvent }: Pro
       >
         {event.recurrence !== "none" ? "↻ " : ""}
         {icon ? `${icon} ` : ""}
-        {event.all_day ? "" : format(new Date(event.start_at), "h:mma ")}
+        {event.all_day ? "" : format(wallClockDate(event.start_at), "h:mma ")}
         {event.title}
         {event.age ? ` (turns ${event.age})` : ""}
       </button>
@@ -142,7 +143,7 @@ export default function EventPill({ event, icon, deleteEvent, updateEvent }: Pro
             </h3>
             <p className="mb-1 text-sm text-slate-600">
               {format(
-                new Date(event.start_at),
+                wallClockDate(event.start_at),
                 event.all_day ? "EEEE, MMMM d, yyyy" : "EEEE, MMMM d, yyyy 'at' h:mma"
               )}
             </p>
