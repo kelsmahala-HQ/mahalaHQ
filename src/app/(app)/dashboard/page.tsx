@@ -70,7 +70,7 @@ export default async function DashboardPage() {
     supabase.from("bills").select("*").eq("household_id", household.householdId),
     supabase
       .from("bill_payments")
-      .select("bill_id")
+      .select("bill_id, amount")
       .eq("household_id", household.householdId)
       .gte("paid_on", periodStart)
       .lte("paid_on", periodEnd),
@@ -91,17 +91,24 @@ export default async function DashboardPage() {
 
   const totalDebt = (debts ?? []).reduce((sum, d) => sum + Number(d.current_balance), 0);
 
-  const paidBillIds = new Set((billPayments ?? []).map((p) => p.bill_id));
+  const paidByBill = new Map<string, number>();
+  for (const p of billPayments ?? []) paidByBill.set(p.bill_id, Number(p.amount));
   const naturalThisPeriod = (bills ?? [])
     .map((b) => ({ ...b, occurrence: occurrenceInPeriod(b, periodStartDate, periodEndDate) }))
     .filter((b): b is typeof b & { occurrence: Date } => b.occurrence !== null);
   const billsThisPeriod = applyReschedules(bills ?? [], naturalThisPeriod, reschedules ?? [], periodStartDate).sort(
     (a, b) => a.occurrence.getTime() - b.occurrence.getTime()
   );
-  const plannedIncome = billsThisPeriod.filter((b) => b.type === "income").reduce((sum, b) => sum + Number(b.amount), 0);
-  const plannedExpense = billsThisPeriod.filter((b) => b.type === "expense").reduce((sum, b) => sum + Number(b.amount), 0);
-  const unallocated = plannedIncome - plannedExpense;
-  const unpaidBillsThisPeriod = billsThisPeriod.filter((b) => b.type === "expense" && !paidBillIds.has(b.id));
+  let totalIncome = 0;
+  let totalExpense = 0;
+  for (const b of billsThisPeriod) {
+    const paid = paidByBill.get(b.id);
+    if (paid === undefined) continue;
+    if (b.type === "income") totalIncome += paid;
+    else totalExpense += paid;
+  }
+  const remaining = totalIncome - totalExpense;
+  const unpaidBillsThisPeriod = billsThisPeriod.filter((b) => b.type === "expense" && !paidByBill.has(b.id));
 
   const roundupThreshold = Number(roundupSettings?.threshold ?? 25);
   const roundupSaved = (roundupPurchases ?? []).reduce((sum, p) => sum + Number(p.round_up), 0);
@@ -194,9 +201,9 @@ export default async function DashboardPage() {
             {format(periodStartDate, "MMM d")} – {format(periodEndDate, "MMM d")}
           </p>
           <div className="mb-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-            <span className="text-sm text-slate-500">Unallocated</span>
-            <span className={`text-lg font-semibold ${unallocated < 0 ? "text-red-600" : "text-slate-900"}`}>
-              {currency(unallocated)}
+            <span className="text-sm text-slate-500">Remaining</span>
+            <span className={`text-lg font-semibold ${remaining < 0 ? "text-red-600" : "text-slate-900"}`}>
+              {currency(remaining)}
             </span>
           </div>
           {!unpaidBillsThisPeriod.length ? (
