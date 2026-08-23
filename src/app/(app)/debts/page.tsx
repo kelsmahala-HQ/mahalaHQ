@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
-import { addDebt, deleteDebt, logPayment, setFocusDebt } from "./actions";
+import { addDebt, deleteDebt, logPayment, setFocusDebt, syncDebtToBill } from "./actions";
 
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -13,11 +13,15 @@ function currency(n: number) {
 export default async function DebtsPage() {
   const household = await requireAdult();
   const supabase = await createClient();
-  const { data: debts } = await supabase
-    .from("debts")
-    .select("*")
-    .eq("household_id", household.householdId)
-    .order("interest_rate", { ascending: false, nullsFirst: false });
+  const [{ data: debts }, { data: linkedBills }] = await Promise.all([
+    supabase
+      .from("debts")
+      .select("*")
+      .eq("household_id", household.householdId)
+      .order("interest_rate", { ascending: false, nullsFirst: false }),
+    supabase.from("bills").select("debt_id").eq("household_id", household.householdId).not("debt_id", "is", null),
+  ]);
+  const debtIdsInBudget = new Set((linkedBills ?? []).map((b) => b.debt_id));
 
   const totalBalance = (debts ?? []).reduce((sum, d) => sum + Number(d.current_balance), 0);
   const totalMinPayments = (debts ?? []).reduce((sum, d) => sum + Number(d.minimum_payment ?? 0), 0);
@@ -96,6 +100,8 @@ export default async function DebtsPage() {
             const original = Number(d.original_balance ?? d.current_balance);
             const current = Number(d.current_balance);
             const paidPct = original > 0 ? Math.min(100, Math.round(((original - current) / original) * 100)) : 0;
+            const inBudget = debtIdsInBudget.has(d.id);
+            const canSync = !!d.minimum_payment && (!!d.due_day || d.due_weekday !== null);
             return (
               <Card key={d.id} className={d.is_focus ? "ring-2 ring-yellow-400" : ""}>
                 <div className="mb-2 flex items-center justify-between">
@@ -128,10 +134,22 @@ export default async function DebtsPage() {
                       </p>
                     </div>
                   </div>
-                  <form action={deleteDebt}>
-                    <input type="hidden" name="id" value={d.id} />
-                    <button className={iconButtonClass}>Remove</button>
-                  </form>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {inBudget ? (
+                      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">✓ In Budget</span>
+                    ) : canSync ? (
+                      <form action={syncDebtToBill}>
+                        <input type="hidden" name="debt_id" value={d.id} />
+                        <button className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 hover:bg-teal-100">
+                          + Add to Budget
+                        </button>
+                      </form>
+                    ) : null}
+                    <form action={deleteDebt}>
+                      <input type="hidden" name="id" value={d.id} />
+                      <button className={iconButtonClass}>Remove</button>
+                    </form>
+                  </div>
                 </div>
 
                 <div className="mb-1 flex items-center justify-between text-sm">
