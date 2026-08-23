@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { applyDebtPayment } from "@/lib/debt-payment";
 import { calculateRoundUp } from "@/lib/roundup";
+import { notifyIfThresholdReached } from "@/lib/roundup-notify";
 
 export async function updateSettings(formData: FormData) {
   const household = await requireHousehold();
@@ -40,6 +41,8 @@ export async function addPurchase(formData: FormData) {
     round_up: roundUp,
   });
 
+  await notifyIfThresholdReached(household.householdId, household.householdName);
+
   revalidatePath("/roundup");
 }
 
@@ -68,6 +71,7 @@ export async function sendPayout(formData: FormData) {
   });
 
   await applyDebtPayment(supabase, debtId, amount, { note: "Round-up payment" });
+  await supabase.from("roundup_settings").upsert({ household_id: household.householdId, notified: false });
 
   revalidatePath("/roundup");
   revalidatePath("/debts");

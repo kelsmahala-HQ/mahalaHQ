@@ -7,11 +7,23 @@ import { requireHousehold } from "@/lib/household";
 export async function addChore(formData: FormData) {
   const household = await requireHousehold();
   const supabase = await createClient();
+  const assignedMemberId = (formData.get("assigned_member_id") as string) || null;
+
+  let assignedTo: string | null = null;
+  if (assignedMemberId) {
+    const { data: member } = await supabase
+      .from("household_members")
+      .select("display_name")
+      .eq("id", assignedMemberId)
+      .maybeSingle();
+    assignedTo = member?.display_name ?? null;
+  }
 
   await supabase.from("chores").insert({
     household_id: household.householdId,
     title: formData.get("title") as string,
-    assigned_to: formData.get("assigned_to") as string,
+    assigned_member_id: assignedMemberId,
+    assigned_to: assignedTo,
     frequency: (formData.get("frequency") as string) || "once",
     points: Number(formData.get("points") || 0),
     due_date: (formData.get("due_date") as string) || null,

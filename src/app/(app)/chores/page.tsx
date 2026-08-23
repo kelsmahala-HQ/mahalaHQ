@@ -6,38 +6,60 @@ import { addChore, completeChore, deleteChore } from "./actions";
 export default async function ChoresPage() {
   const household = await requireHousehold();
   const supabase = await createClient();
-  const { data: chores } = await supabase
-    .from("chores")
-    .select("*")
-    .eq("household_id", household.householdId)
-    .order("status")
-    .order("due_date", { nullsFirst: false });
+  const isKid = household.role === "kid";
+
+  const [{ data: members }, choresQuery] = await Promise.all([
+    supabase.from("household_members").select("id, display_name").eq("household_id", household.householdId).order("display_name"),
+    (() => {
+      let query = supabase
+        .from("chores")
+        .select("*")
+        .eq("household_id", household.householdId)
+        .order("status")
+        .order("due_date", { nullsFirst: false });
+      if (isKid) query = query.eq("assigned_member_id", household.memberId);
+      return query;
+    })(),
+  ]);
+  const { data: chores } = choresQuery;
 
   return (
     <div>
-      <PageHeader title="Chores" subtitle="Assign tasks and track who's done what." />
+      <PageHeader
+        title={isKid ? "Your Chores" : "Chores"}
+        subtitle={isKid ? "Everything assigned to you." : "Assign tasks and track who's done what."}
+      />
 
-      <Card className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a chore</h2>
-        <form action={addChore} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <input name="title" required placeholder="Chore (e.g. Take out trash)" className={inputClass} />
-          <input name="assigned_to" placeholder="Assigned to" className={inputClass} />
-          <select name="frequency" className={inputClass} defaultValue="weekly">
-            <option value="once">One-time</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
-          <input name="points" type="number" min={0} placeholder="Points (optional)" className={inputClass} />
-          <input name="due_date" type="date" className={inputClass} />
-          <button type="submit" className={`${buttonClass} sm:col-span-2`}>
-            Add chore
-          </button>
-        </form>
-      </Card>
+      {!isKid && (
+        <Card className="mb-8">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a chore</h2>
+          <form action={addChore} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input name="title" required placeholder="Chore (e.g. Take out trash)" className={inputClass} />
+            <select name="assigned_member_id" className={inputClass} defaultValue="">
+              <option value="">Unassigned</option>
+              {members?.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.display_name}
+                </option>
+              ))}
+            </select>
+            <select name="frequency" className={inputClass} defaultValue="weekly">
+              <option value="once">One-time</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+            <input name="points" type="number" min={0} placeholder="Points (optional)" className={inputClass} />
+            <input name="due_date" type="date" className={inputClass} />
+            <button type="submit" className={`${buttonClass} sm:col-span-2`}>
+              Add chore
+            </button>
+          </form>
+        </Card>
+      )}
 
       {!chores?.length ? (
-        <EmptyState message="No chores yet — add one above." />
+        <EmptyState message={isKid ? "Nothing assigned to you right now. 🎉" : "No chores yet — add one above."} />
       ) : (
         <div className="space-y-2">
           {chores.map((chore) => (
@@ -53,7 +75,7 @@ export default async function ChoresPage() {
                 </p>
                 <p className="text-sm text-slate-500">
                   {[
-                    chore.assigned_to,
+                    !isKid ? chore.assigned_to : null,
                     chore.frequency !== "once" ? chore.frequency : null,
                     chore.due_date ? `due ${chore.due_date}` : null,
                   ]
@@ -69,10 +91,12 @@ export default async function ChoresPage() {
                     {chore.status === "done" ? "Done ✓" : "Mark done"}
                   </button>
                 </form>
-                <form action={deleteChore}>
-                  <input type="hidden" name="id" value={chore.id} />
-                  <button className={iconButtonClass}>Remove</button>
-                </form>
+                {!isKid && (
+                  <form action={deleteChore}>
+                    <input type="hidden" name="id" value={chore.id} />
+                    <button className={iconButtonClass}>Remove</button>
+                  </form>
+                )}
               </div>
             </Card>
           ))}

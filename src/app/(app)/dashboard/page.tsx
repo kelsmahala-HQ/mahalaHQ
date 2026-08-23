@@ -60,17 +60,26 @@ export default async function DashboardPage() {
       <PageHeader title={`Welcome, ${household.displayName}`} subtitle={household.householdName} />
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card>
-          <p className="text-xs font-medium uppercase text-slate-400">Groceries to buy</p>
-          <p className="mt-1 text-2xl font-semibold text-slate-900">{groceryItems?.length ?? 0}</p>
+        <Card className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-lg">🛒</span>
+          <div>
+            <p className="text-xs font-medium uppercase text-slate-400">Groceries to buy</p>
+            <p className="text-2xl font-semibold text-slate-900">{groceryItems?.length ?? 0}</p>
+          </div>
         </Card>
-        <Card>
-          <p className="text-xs font-medium uppercase text-slate-400">Open chores</p>
-          <p className="mt-1 text-2xl font-semibold text-slate-900">{openChores?.length ?? 0}</p>
+        <Card className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-lg">🧹</span>
+          <div>
+            <p className="text-xs font-medium uppercase text-slate-400">Open chores</p>
+            <p className="text-2xl font-semibold text-slate-900">{openChores?.length ?? 0}</p>
+          </div>
         </Card>
-        <Card>
-          <p className="text-xs font-medium uppercase text-slate-400">Total debt</p>
-          <p className="mt-1 text-2xl font-semibold text-slate-900">{currency(totalDebt)}</p>
+        <Card className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-lg">📉</span>
+          <div>
+            <p className="text-xs font-medium uppercase text-slate-400">Total debt</p>
+            <p className="text-2xl font-semibold text-slate-900">{currency(totalDebt)}</p>
+          </div>
         </Card>
       </div>
 

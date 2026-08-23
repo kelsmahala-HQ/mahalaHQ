@@ -52,7 +52,7 @@ export default async function RoundupPage() {
     <div>
       <PageHeader
         title="Round-Up"
-        subtitle="Every purchase rounds up to the next dollar (× your multiplier) and stacks toward a payment on your focus debt."
+        subtitle="Every purchase rounds up to the next dollar (× your multiplier) and stacks toward a payment on your focus debt. Admins and adults get an email the moment it's ready to send."
       />
 
       <Card className="mb-8">

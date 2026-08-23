@@ -58,7 +58,7 @@ function Avatar({ name, url, size = 48 }: { name: string; url: string | null; si
   );
 }
 
-export default function ProfileCard({ profile }: { profile: Profile }) {
+export default function ProfileCard({ profile, isYou }: { profile: Profile; isYou: boolean }) {
   const [editing, setEditing] = useState(false);
   const [dob, setDob] = useState(profile.date_of_birth ?? "");
 
@@ -88,7 +88,10 @@ export default function ProfileCard({ profile }: { profile: Profile }) {
           <div className="flex items-center gap-3">
             <Avatar name={profile.member_name} url={profile.avatarUrl} />
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">{profile.member_name}</h3>
+              <h3 className="text-lg font-semibold text-slate-900">
+                {profile.member_name}
+                {isYou && <span className="ml-2 text-sm font-normal text-slate-400">(you)</span>}
+              </h3>
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                   isMinor ? "bg-yellow-100 text-yellow-800" : "bg-teal-100 text-teal-800"

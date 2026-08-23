@@ -10,6 +10,7 @@ export async function addProfile(formData: FormData) {
 
   await supabase.from("family_profiles").insert({
     household_id: household.householdId,
+    member_id: (formData.get("member_id") as string) || null,
     member_name: formData.get("member_name") as string,
     date_of_birth: (formData.get("date_of_birth") as string) || null,
     school_name: formData.get("school_name") as string,

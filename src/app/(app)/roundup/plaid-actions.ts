@@ -6,6 +6,7 @@ import { requireHousehold } from "@/lib/household";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createPlaidClient } from "@/lib/plaid";
 import { calculateRoundUp } from "@/lib/roundup";
+import { notifyIfThresholdReached } from "@/lib/roundup-notify";
 
 export async function createLinkToken(): Promise<{ linkToken: string } | { error: string }> {
   const household = await requireHousehold();
@@ -115,6 +116,8 @@ export async function syncTransactions() {
 
     await admin.from("plaid_items").update({ cursor }).eq("id", item.id);
   }
+
+  await notifyIfThresholdReached(household.householdId, household.householdName);
 
   revalidatePath("/roundup");
 }

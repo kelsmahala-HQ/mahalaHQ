@@ -10,7 +10,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
     .from("chores")
     .select("*")
     .eq("household_id", household.householdId)
-    .ilike("assigned_to", household.displayName)
+    .eq("assigned_member_id", household.memberId)
     .order("status")
     .order("due_date", { nullsFirst: false });
 

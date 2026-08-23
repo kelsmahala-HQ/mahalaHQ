@@ -45,6 +45,7 @@ $$;
 create table if not exists family_profiles (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references households(id) on delete cascade,
+  member_id uuid references household_members(id) on delete set null, -- links this card to a real login, if they have one
   member_name text not null,
   date_of_birth date,
   school_name text,
@@ -63,8 +64,9 @@ create table if not exists family_profiles (
   updated_at timestamptz not null default now()
 );
 
--- Adds avatar_path to family_profiles for installs that ran an earlier version of this script.
+-- Adds avatar_path/member_id to family_profiles for installs that ran an earlier version of this script.
 alter table family_profiles add column if not exists avatar_path text;
+alter table family_profiles add column if not exists member_id uuid references household_members(id) on delete set null;
 
 -- ============================================================================
 -- Emergency contacts
@@ -125,7 +127,8 @@ create table if not exists chores (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references households(id) on delete cascade,
   title text not null,
-  assigned_to text,
+  assigned_to text, -- denormalized display name, kept in sync with assigned_member_id
+  assigned_member_id uuid references household_members(id) on delete set null,
   frequency text not null default 'once' check (frequency in ('once', 'daily', 'weekly', 'monthly')),
   points integer not null default 0,
   due_date date,
@@ -133,6 +136,9 @@ create table if not exists chores (
   last_completed_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+-- Adds assigned_member_id to chores for installs that ran an earlier version of this script.
+alter table chores add column if not exists assigned_member_id uuid references household_members(id) on delete set null;
 
 -- ============================================================================
 -- House maintenance
@@ -246,8 +252,12 @@ create table if not exists roundup_settings (
   household_id uuid primary key references households(id) on delete cascade,
   multiplier numeric(4, 2) not null default 2,
   threshold numeric(10, 2) not null default 25,
+  notified boolean not null default false, -- true once we've emailed about the current threshold crossing; resets on payout
   updated_at timestamptz not null default now()
 );
+
+-- Adds notified to roundup_settings for installs that ran an earlier version of this script.
+alter table roundup_settings add column if not exists notified boolean not null default false;
 
 create table if not exists roundup_purchases (
   id uuid primary key default gen_random_uuid(),
