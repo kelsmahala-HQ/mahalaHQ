@@ -79,8 +79,10 @@ export default function PaidCheckbox({
   }
 
   function commitMove(targetDate: string) {
-    setEditingDate(false);
+    // Native date inputs fire onChange per keystroke/segment while typing, with an empty value
+    // until all of month/day/year are filled in -- only close and submit once it's complete.
     if (!targetDate) return;
+    setEditingDate(false);
     startTransition(async () => {
       const fd = new FormData();
       fd.set("bill_id", billId);

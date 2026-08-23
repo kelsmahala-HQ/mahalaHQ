@@ -83,7 +83,12 @@ export default function BillRow({
           <button onClick={() => setEditing(true)} className="text-xs font-medium text-teal-600 hover:text-teal-500">
             Edit
           </button>
-          <form action={deleteBill}>
+          <form
+            action={deleteBill}
+            onSubmit={(e) => {
+              if (!confirm(`Remove "${bill.name}"? This can't be undone.`)) e.preventDefault();
+            }}
+          >
             <input type="hidden" name="id" value={bill.id} />
             <button className={iconButtonClass}>Remove</button>
           </form>
