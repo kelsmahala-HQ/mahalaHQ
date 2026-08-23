@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { createHousehold, joinHousehold } from "./actions";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const supabase = createClient();
   const [mode, setMode] = useState<"create" | "join">("create");
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -19,62 +18,24 @@ export default function OnboardingPage() {
     setError(null);
     setLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const formData = new FormData();
+    formData.set("displayName", displayName);
 
-    if (!user) {
-      setLoading(false);
-      return setError("You must be signed in.");
-    }
-
+    let result;
     if (mode === "create") {
-      const { data: household, error: householdError } = await supabase
-        .from("households")
-        .insert({ name })
-        .select("id")
-        .single();
-
-      if (householdError || !household) {
-        setLoading(false);
-        return setError(householdError?.message ?? "Could not create household.");
-      }
-
-      const { error: memberError } = await supabase.from("household_members").insert({
-        household_id: household.id,
-        user_id: user.id,
-        display_name: displayName,
-        role: "admin",
-      });
-
-      setLoading(false);
-      if (memberError) return setError(memberError.message);
-      router.push("/dashboard");
-      router.refresh();
+      formData.set("name", name);
+      result = await createHousehold(formData);
     } else {
-      const { data: household, error: findError } = await supabase
-        .from("households")
-        .select("id")
-        .eq("invite_code", inviteCode.trim())
-        .maybeSingle();
-
-      if (findError || !household) {
-        setLoading(false);
-        return setError("No household found with that invite code.");
-      }
-
-      const { error: memberError } = await supabase.from("household_members").insert({
-        household_id: household.id,
-        user_id: user.id,
-        display_name: displayName,
-        role: "adult",
-      });
-
-      setLoading(false);
-      if (memberError) return setError(memberError.message);
-      router.push("/dashboard");
-      router.refresh();
+      formData.set("inviteCode", inviteCode);
+      result = await joinHousehold(formData);
     }
+
+    setLoading(false);
+
+    if ("error" in result) return setError(result.error);
+
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (
