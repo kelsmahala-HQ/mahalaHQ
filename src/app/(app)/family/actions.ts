@@ -49,6 +49,7 @@ export async function updateProfile(formData: FormData): Promise<{ error: string
   const { error } = await supabase
     .from("family_profiles")
     .update({
+      member_id: (formData.get("member_id") as string) || null,
       member_name: formData.get("member_name") as string,
       date_of_birth: (formData.get("date_of_birth") as string) || null,
       school_name: formData.get("school_name") as string,

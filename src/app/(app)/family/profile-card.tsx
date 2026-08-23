@@ -8,6 +8,7 @@ import { deleteProfile, updateProfile } from "./actions";
 
 type Profile = {
   id: string;
+  member_id: string | null;
   member_name: string;
   date_of_birth: string | null;
   school_name: string | null;
@@ -58,7 +59,17 @@ function Avatar({ name, url, size = 48 }: { name: string; url: string | null; si
   );
 }
 
-export default function ProfileCard({ profile, isYou }: { profile: Profile; isYou: boolean }) {
+export default function ProfileCard({
+  profile,
+  isYou,
+  linkedDisplayName,
+  availableMembers,
+}: {
+  profile: Profile;
+  isYou: boolean;
+  linkedDisplayName: string | null;
+  availableMembers: { id: string; display_name: string }[];
+}) {
   const [editing, setEditing] = useState(false);
   const [dob, setDob] = useState(profile.date_of_birth ?? "");
 
@@ -99,6 +110,9 @@ export default function ProfileCard({ profile, isYou }: { profile: Profile; isYo
               >
                 {age !== null ? (isMinor ? "Child" : "Adult") : "Age unknown"}
               </span>
+              <p className="mt-0.5 text-xs text-slate-400">
+                {linkedDisplayName ? `🔗 Linked to ${linkedDisplayName}'s login` : "Not linked to a login yet"}
+              </p>
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -149,6 +163,14 @@ export default function ProfileCard({ profile, isYou }: { profile: Profile; isYo
         </div>
 
         <input name="member_name" defaultValue={profile.member_name} required placeholder="Name" className={inputClass} />
+        <select name="member_id" defaultValue={profile.member_id ?? ""} className={inputClass}>
+          <option value="">Not linked to a login</option>
+          {availableMembers.map((m) => (
+            <option key={m.id} value={m.id}>
+              Link to {m.display_name}&rsquo;s login
+            </option>
+          ))}
+        </select>
         <input
           name="date_of_birth"
           type="date"

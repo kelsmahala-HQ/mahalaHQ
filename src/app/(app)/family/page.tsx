@@ -20,6 +20,9 @@ export default async function FamilyPage() {
     }))
   );
 
+  const membersById = new Map((members ?? []).map((m) => [m.id, m.display_name]));
+  const linkedMemberIds = new Set(profilesWithAvatars.map((p) => p.member_id).filter(Boolean));
+
   return (
     <div>
       <PageHeader
@@ -37,7 +40,13 @@ export default async function FamilyPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {profilesWithAvatars.map((p) => (
-            <ProfileCard key={p.id} profile={p} isYou={p.member_id === household.memberId} />
+            <ProfileCard
+              key={p.id}
+              profile={p}
+              isYou={p.member_id === household.memberId}
+              linkedDisplayName={p.member_id ? membersById.get(p.member_id) ?? null : null}
+              availableMembers={(members ?? []).filter((m) => m.id === p.member_id || !linkedMemberIds.has(m.id))}
+            />
           ))}
         </div>
       )}
