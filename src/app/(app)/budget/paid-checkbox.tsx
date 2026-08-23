@@ -148,14 +148,24 @@ export default function PaidCheckbox({
           )}
         </div>
         {editingDate && (
-          <input
-            type="date"
-            autoFocus
-            className="mt-1 rounded-md border border-teal-500 px-2 py-1 text-xs"
-            onClick={(e) => e.preventDefault()}
-            onChange={(e) => commitMove(e.target.value)}
-            onBlur={() => setEditingDate(false)}
-          />
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              type="date"
+              autoFocus
+              className="rounded-md border border-teal-500 px-2 py-1 text-xs"
+              onChange={(e) => commitMove(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setEditingDate(false);
+              }}
+              className="text-xs text-slate-400 hover:text-red-600"
+            >
+              Cancel
+            </button>
+          </div>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
