@@ -332,6 +332,10 @@ begin
   end if;
 end $$;
 
+-- Links a bill to the debt it was auto-created from (a minimum payment mirrored into Budget);
+-- deleting the debt removes its mirrored bill too.
+alter table bills add column if not exists debt_id uuid references debts(id) on delete cascade;
+
 create table if not exists debt_payments (
   id uuid primary key default gen_random_uuid(),
   debt_id uuid not null references debts(id) on delete cascade,
