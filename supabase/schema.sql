@@ -237,11 +237,19 @@ create table if not exists debts (
   due_day integer check (due_day between 1 and 31),
   notes text,
   is_focus boolean not null default false,
+  plaid_account_id text unique, -- links this row to a synced credit/loan account; null for manually-tracked debts
   created_at timestamptz not null default now()
 );
 
--- Adds is_focus to debts for installs that ran an earlier version of this script.
+-- Adds is_focus/plaid_account_id to debts for installs that ran an earlier version of this script.
 alter table debts add column if not exists is_focus boolean not null default false;
+alter table debts add column if not exists plaid_account_id text;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'debts_plaid_account_id_key') then
+    alter table debts add constraint debts_plaid_account_id_key unique (plaid_account_id);
+  end if;
+end $$;
 
 create table if not exists debt_payments (
   id uuid primary key default gen_random_uuid(),
