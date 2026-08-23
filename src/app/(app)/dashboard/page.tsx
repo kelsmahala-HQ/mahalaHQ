@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   const [
     { data: upcomingEvents },
     { data: openChores },
-    { data: groceryItems },
+    { count: groceryCount },
     { data: overdueMaintenance },
     { data: debts },
   ] = await Promise.all([
@@ -66,7 +66,7 @@ export default async function DashboardPage() {
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-lg">🛒</span>
           <div>
             <p className="text-xs font-medium uppercase text-slate-400">Groceries to buy</p>
-            <p className="text-2xl font-semibold text-slate-900">{groceryItems?.length ?? 0}</p>
+            <p className="text-2xl font-semibold text-slate-900">{groceryCount ?? 0}</p>
           </div>
         </Card>
         <Card className="flex items-center gap-3">
