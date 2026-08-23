@@ -54,7 +54,7 @@ export async function sendInviteEmail(formData: FormData): Promise<{ error: stri
   const resend = new Resend(process.env.RESEND_API_KEY);
 
   const { error } = await resend.emails.send({
-    from: "Family Portal <onboarding@resend.dev>",
+    from: "Family Portal <invites@mahalahq.org>",
     to: email,
     subject: `${household.displayName} invited you to join ${household.householdName}`,
     html: `

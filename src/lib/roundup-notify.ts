@@ -36,7 +36,7 @@ export async function notifyIfThresholdReached(householdId: string, householdNam
     const resend = new Resend(process.env.RESEND_API_KEY);
     const debtText = focusDebt ? `toward ${focusDebt.name}` : "toward your focus debt";
     await resend.emails.send({
-      from: "Family Portal <onboarding@resend.dev>",
+      from: "Family Portal <invites@mahalahq.org>",
       to: emails,
       subject: `🪙 ${householdName}'s Round-Up jar hit $${threshold}`,
       html: `<p>Your spare change jar just reached <strong>$${threshold.toFixed(2)}</strong> ${debtText}. Open the Round-Up page to send it.</p>`,
