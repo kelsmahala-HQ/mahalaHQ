@@ -7,12 +7,12 @@ import InviteCode from "./invite-code";
 
 export default function MobileNav({
   navGroups,
-  isKid,
+  showManagement,
   inviteCode,
   householdName,
 }: {
   navGroups: NavGroup[];
-  isKid: boolean;
+  showManagement: boolean;
   inviteCode: string;
   householdName: string;
 }) {
@@ -56,7 +56,7 @@ export default function MobileNav({
               </div>
             </div>
           ))}
-          {!isKid && (
+          {showManagement && (
             <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
               <InviteCode code={inviteCode} householdName={householdName} />
               <Link

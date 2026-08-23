@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
-import { requireAdult } from "@/lib/household";
+import { requireCaregiver } from "@/lib/household";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { getAvatarUrl } from "./actions";
 import ProfileCard from "./profile-card";
 import AddProfileForm from "./add-profile-form";
 
 export default async function FamilyPage() {
-  const household = await requireAdult();
+  const household = await requireCaregiver();
   const supabase = await createClient();
   const [{ data: profiles }, { data: members }] = await Promise.all([
     supabase.from("family_profiles").select("*").eq("household_id", household.householdId).order("member_name"),

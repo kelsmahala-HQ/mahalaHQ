@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+export type Role = "admin" | "adult" | "kid" | "sitter";
+
 export type CurrentHousehold = {
   householdId: string;
   householdName: string;
   inviteCode: string;
   memberId: string;
   displayName: string;
-  role: "admin" | "adult" | "kid";
+  role: Role;
   userId: string;
 };
 
@@ -40,13 +42,20 @@ export async function requireHousehold(): Promise<CurrentHousehold> {
     inviteCode: household.invite_code,
     memberId: membership.id,
     displayName: membership.display_name,
-    role: membership.role as "admin" | "adult" | "kid",
+    role: membership.role as Role,
     userId: user.id,
   };
 }
 
-/** Same as requireHousehold(), but bounces kid accounts to the dashboard — use on adult-only pages. */
+/** Bounces kid and sitter accounts to the dashboard — use on pages with financial/sensitive data (budget, debts, documents, etc). */
 export async function requireAdult(): Promise<CurrentHousehold> {
+  const household = await requireHousehold();
+  if (household.role === "kid" || household.role === "sitter") redirect("/dashboard");
+  return household;
+}
+
+/** Bounces only kid accounts — use on pages a sitter should also see (family info, emergency contacts). */
+export async function requireCaregiver(): Promise<CurrentHousehold> {
   const household = await requireHousehold();
   if (household.role === "kid") redirect("/dashboard");
   return household;

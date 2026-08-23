@@ -7,6 +7,7 @@ export default async function ChoresPage() {
   const household = await requireHousehold();
   const supabase = await createClient();
   const isKid = household.role === "kid";
+  const canManage = household.role === "admin" || household.role === "adult";
 
   const [{ data: members }, choresQuery] = await Promise.all([
     supabase.from("household_members").select("id, display_name").eq("household_id", household.householdId).order("display_name"),
@@ -30,7 +31,7 @@ export default async function ChoresPage() {
         subtitle={isKid ? "Everything assigned to you." : "Assign tasks and track who's done what."}
       />
 
-      {!isKid && (
+      {canManage && (
         <Card className="mb-8">
           <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a chore</h2>
           <form action={addChore} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -91,7 +92,7 @@ export default async function ChoresPage() {
                     {chore.status === "done" ? "Done ✓" : "Mark done"}
                   </button>
                 </form>
-                {!isKid && (
+                {canManage && (
                   <form action={deleteChore}>
                     <input type="hidden" name="id" value={chore.id} />
                     <button className={iconButtonClass}>Remove</button>

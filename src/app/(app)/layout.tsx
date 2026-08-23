@@ -8,6 +8,7 @@ import { DASHBOARD_LINK, navGroupsForRole } from "./nav";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const household = await requireHousehold();
   const navGroups = navGroupsForRole(household.role);
+  const showManagement = household.role === "admin" || household.role === "adult";
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -43,10 +44,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
         <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
-          {household.role !== "kid" && (
+          {showManagement && (
             <InviteCode code={household.inviteCode} householdName={household.householdName} />
           )}
-          {household.role !== "kid" && (
+          {showManagement && (
             <Link href="/settings" className="block px-2 text-xs font-medium text-slate-500 hover:text-teal-600">
               ⚙️ Household members
             </Link>
@@ -61,7 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-2">
             <MobileNav
               navGroups={navGroups}
-              isKid={household.role === "kid"}
+              showManagement={showManagement}
               inviteCode={household.inviteCode}
               householdName={household.householdName}
             />

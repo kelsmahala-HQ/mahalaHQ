@@ -8,6 +8,7 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   adult: "Adult",
   kid: "Kid",
+  sitter: "Sitter",
 };
 
 export default async function SettingsPage() {
@@ -22,7 +23,10 @@ export default async function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Household Members" subtitle="Kid accounts only see Chores, Calendar, and Groceries — everything else is hidden." />
+      <PageHeader
+        title="Household Members"
+        subtitle="Kid accounts only see Chores, Calendar, and Groceries. Sitter accounts only see Family Info, Emergency Contacts, and the Calendar — no financial or household-management pages."
+      />
 
       <Card className="mb-8">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Invite a family member</h2>
@@ -51,6 +55,7 @@ export default async function SettingsPage() {
                         <option value="admin">Admin</option>
                         <option value="adult">Adult</option>
                         <option value="kid">Kid</option>
+                        <option value="sitter">Sitter</option>
                       </select>
                       <button type="submit" className="rounded-lg bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
                         Save

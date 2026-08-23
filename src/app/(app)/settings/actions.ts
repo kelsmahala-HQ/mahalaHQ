@@ -12,7 +12,7 @@ export async function updateMemberRole(formData: FormData) {
 
   const memberId = formData.get("member_id") as string;
   const role = formData.get("role") as string;
-  if (!["admin", "adult", "kid"].includes(role)) return;
+  if (!["admin", "adult", "kid", "sitter"].includes(role)) return;
 
   const admin = createAdminClient();
   await admin.from("household_members").update({ role }).eq("id", memberId).eq("household_id", household.householdId);

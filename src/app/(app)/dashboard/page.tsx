@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, PageHeader } from "@/components/ui";
 import KidDashboard from "./kid-dashboard";
+import SitterDashboard from "./sitter-dashboard";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -11,6 +12,7 @@ function currency(n: number) {
 export default async function DashboardPage() {
   const household = await requireHousehold();
   if (household.role === "kid") return <KidDashboard household={household} />;
+  if (household.role === "sitter") return <SitterDashboard household={household} />;
 
   const supabase = await createClient();
   const now = new Date();

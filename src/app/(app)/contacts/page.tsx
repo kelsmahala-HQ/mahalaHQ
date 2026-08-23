@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { requireAdult } from "@/lib/household";
+import { requireCaregiver } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { addContact, deleteContact } from "./actions";
 
@@ -14,7 +14,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default async function ContactsPage() {
-  const household = await requireAdult();
+  const household = await requireCaregiver();
   const supabase = await createClient();
   const { data: contacts } = await supabase
     .from("emergency_contacts")

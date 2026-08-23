@@ -18,7 +18,7 @@ create table if not exists household_members (
   household_id uuid not null references households(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   display_name text not null,
-  role text not null default 'adult' check (role in ('admin', 'adult', 'kid')),
+  role text not null default 'adult' check (role in ('admin', 'adult', 'kid', 'sitter')),
   avatar_color text not null default '#6366f1',
   phone text,
   created_at timestamptz not null default now(),
@@ -27,6 +27,14 @@ create table if not exists household_members (
 
 -- Adds phone to household_members for installs that ran an earlier version of this script.
 alter table household_members add column if not exists phone text;
+
+-- Widens the role check to include 'sitter' for installs that ran an earlier version of this script.
+do $$
+begin
+  alter table household_members drop constraint if exists household_members_role_check;
+  alter table household_members add constraint household_members_role_check
+    check (role in ('admin', 'adult', 'kid', 'sitter'));
+end $$;
 
 -- Helper: households the current user belongs to. Used by every RLS policy below.
 create or replace function my_household_ids()
