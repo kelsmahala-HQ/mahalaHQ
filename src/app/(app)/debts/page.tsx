@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdult } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { addDebt, deleteDebt, logPayment, setFocusDebt } from "./actions";
-import SyncLiabilitiesButton from "./sync-liabilities-button";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -13,12 +11,11 @@ function currency(n: number) {
 export default async function DebtsPage() {
   const household = await requireAdult();
   const supabase = await createClient();
-  const admin = createAdminClient();
-
-  const [{ data: debts }, { data: plaidItems }] = await Promise.all([
-    supabase.from("debts").select("*").eq("household_id", household.householdId).order("interest_rate", { ascending: false, nullsFirst: false }),
-    admin.from("plaid_items").select("id").eq("household_id", household.householdId).limit(1),
-  ]);
+  const { data: debts } = await supabase
+    .from("debts")
+    .select("*")
+    .eq("household_id", household.householdId)
+    .order("interest_rate", { ascending: false, nullsFirst: false });
 
   const totalBalance = (debts ?? []).reduce((sum, d) => sum + Number(d.current_balance), 0);
   const totalMinPayments = (debts ?? []).reduce((sum, d) => sum + Number(d.minimum_payment ?? 0), 0);
@@ -27,21 +24,8 @@ export default async function DebtsPage() {
     <div>
       <PageHeader
         title="Debts"
-        subtitle="Track balances and payoff progress. Payments are logged manually — credit card/loan balances can also sync automatically from a connected bank."
+        subtitle="Track balances and payoff progress. Payments are logged manually — no bank linking or auto-pay."
       />
-
-      <Card className="mb-8">
-        {plaidItems?.length ? (
-          <SyncLiabilitiesButton />
-        ) : (
-          <p className="text-sm text-slate-500">
-            <Link href="/roundup" className="font-medium text-teal-700 underline">
-              Connect a bank
-            </Link>{" "}
-            to automatically sync credit card and loan balances here instead of entering them by hand.
-          </p>
-        )}
-      </Card>
 
       <Card className="mb-8 !bg-yellow-50">
         <p className="text-sm text-slate-700">
@@ -102,14 +86,7 @@ export default async function DebtsPage() {
                       </button>
                     </form>
                     <div>
-                      <p className="font-medium text-slate-900">
-                        {d.name}
-                        {d.plaid_account_id && (
-                          <span className="ml-2 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800">
-                            🔄 Synced
-                          </span>
-                        )}
-                      </p>
+                      <p className="font-medium text-slate-900">{d.name}</p>
                       <p className="text-sm text-slate-500">
                         {[
                           d.creditor,
