@@ -118,16 +118,31 @@ export default async function CalendarPage({
         <form action={addEvent} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input name="title" required placeholder="Event title" className={inputClass} />
           <input name="assigned_to" placeholder="Who (optional)" className={inputClass} />
-          <input name="date" type="date" required defaultValue={todayStr} className={inputClass} />
-          <input name="time" type="time" className={inputClass} />
-          <select name="recurrence" defaultValue="none" className={inputClass}>
-            <option value="none">Does not repeat</option>
-            <option value="daily">Repeats daily</option>
-            <option value="weekly">Repeats weekly</option>
-            <option value="monthly">Repeats monthly</option>
-            <option value="yearly">Repeats yearly</option>
-          </select>
-          <input name="recurrence_end" type="date" placeholder="Repeat until (optional)" className={inputClass} />
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Date</label>
+            <input name="date" type="date" required defaultValue={todayStr} className={inputClass} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Time (leave blank for all-day)</label>
+            <input name="time" type="time" className={inputClass} />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Repeat</label>
+            <select name="recurrence" defaultValue="none" className={inputClass}>
+              <option value="none">Does not repeat</option>
+              <option value="daily">Repeats daily</option>
+              <option value="weekly">Repeats weekly</option>
+              <option value="monthly">Repeats monthly</option>
+              <option value="yearly">Repeats yearly (e.g. birthdays)</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Repeat until (leave blank for forever)</label>
+            <input name="recurrence_end" type="date" className={inputClass} />
+          </div>
+
           <input name="location" placeholder="Location (optional)" className={`${inputClass} sm:col-span-2`} />
           <button type="submit" className={`${buttonClass} sm:col-span-2`}>
             Add event
