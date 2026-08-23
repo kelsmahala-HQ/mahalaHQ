@@ -1,0 +1,64 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { requireHousehold } from "@/lib/household";
+
+export async function addProfile(formData: FormData) {
+  const household = await requireHousehold();
+  const supabase = await createClient();
+
+  await supabase.from("family_profiles").insert({
+    household_id: household.householdId,
+    member_name: formData.get("member_name") as string,
+    date_of_birth: (formData.get("date_of_birth") as string) || null,
+    school_name: formData.get("school_name") as string,
+    grade: formData.get("grade") as string,
+    teacher: formData.get("teacher") as string,
+    doctor_name: formData.get("doctor_name") as string,
+    doctor_phone: formData.get("doctor_phone") as string,
+    dentist_name: formData.get("dentist_name") as string,
+    dentist_phone: formData.get("dentist_phone") as string,
+    allergies: formData.get("allergies") as string,
+    clothing_sizes: formData.get("clothing_sizes") as string,
+    schedule_notes: formData.get("schedule_notes") as string,
+    notes: formData.get("notes") as string,
+  });
+
+  revalidatePath("/family");
+}
+
+export async function updateProfile(formData: FormData) {
+  await requireHousehold();
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  await supabase
+    .from("family_profiles")
+    .update({
+      member_name: formData.get("member_name") as string,
+      date_of_birth: (formData.get("date_of_birth") as string) || null,
+      school_name: formData.get("school_name") as string,
+      grade: formData.get("grade") as string,
+      teacher: formData.get("teacher") as string,
+      doctor_name: formData.get("doctor_name") as string,
+      doctor_phone: formData.get("doctor_phone") as string,
+      dentist_name: formData.get("dentist_name") as string,
+      dentist_phone: formData.get("dentist_phone") as string,
+      allergies: formData.get("allergies") as string,
+      clothing_sizes: formData.get("clothing_sizes") as string,
+      schedule_notes: formData.get("schedule_notes") as string,
+      notes: formData.get("notes") as string,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  revalidatePath("/family");
+}
+
+export async function deleteProfile(formData: FormData) {
+  await requireHousehold();
+  const supabase = await createClient();
+  await supabase.from("family_profiles").delete().eq("id", formData.get("id") as string);
+  revalidatePath("/family");
+}

@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Family Portal
 
-## Getting Started
+A private household app: budgets, debt tracking, chores, shared calendar, grocery list, house maintenance, documents, family member profiles (school/doctor/clothing sizes), and emergency contacts.
 
-First, run the development server:
+Built with Next.js 16 + Supabase (Postgres, Auth, Storage). Not indexed by search engines — this is meant to stay private to your household.
+
+## What's here vs. what's deliberately left out
+
+- **Debt tracking, not auto-pay.** You add debts and log payments manually. There's no bank linking (Plaid) or automated money movement — that requires real compliance/security work and shouldn't be bolted on casually. If you want to revisit that later (e.g. read-only balance syncing via Plaid), it's a separate project.
+- **Multi-user, household-scoped.** Everyone signs in with their own account and joins a household via an invite code. All data is scoped to your household with Postgres row-level security — one household can never see another's data.
+
+## 1. Create a Supabase project (free tier is plenty)
+
+1. Go to [supabase.com](https://supabase.com) and create a new project.
+2. In the SQL Editor, paste the contents of [`supabase/schema.sql`](supabase/schema.sql) and run it. This creates every table, sets up row-level security, and creates the private `documents` storage bucket.
+3. In **Project Settings > API**, copy the **Project URL** and **anon public** key.
+
+## 2. Configure environment variables
+
+Copy `.env.local.example` to `.env.local` and fill in the values from step 1:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 3. Run it locally
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+Open [http://localhost:3000](http://localhost:3000). Sign up, then create a household on the onboarding screen. Share the invite code (shown once you're in) with the rest of the family so they can join the same household.
 
-To learn more about Next.js, take a look at the following resources:
+## 4. Deploy so the whole family can use it
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Push this repo to GitHub.
+2. Import it into [Vercel](https://vercel.com) (free tier).
+3. Add the same two environment variables from step 2 in the Vercel project settings.
+4. Deploy.
+5. In Vercel's project **Domains** settings, add **MahalaHQ.org** (and `www.MahalaHQ.org` if you want both) and follow Vercel's DNS instructions at your domain registrar.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Once deployed, everyone in the household can sign in from their phone or laptop at that URL.
 
-## Deploy on Vercel
+## Project structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `supabase/schema.sql` — full database schema + row-level security policies.
+- `src/lib/supabase/` — browser/server Supabase clients and the auth session middleware.
+- `src/lib/household.ts` — loads the signed-in user's household context; redirects to onboarding/login as needed.
+- `src/app/(app)/` — the authenticated app, one folder per module (budget, debts, chores, calendar, groceries, maintenance, documents, family, contacts), each with a `page.tsx` and an `actions.ts` (Server Actions for mutations).
