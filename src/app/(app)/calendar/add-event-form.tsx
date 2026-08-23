@@ -1,0 +1,69 @@
+"use client";
+
+import { useState } from "react";
+import { buttonClass, inputClass } from "@/components/ui";
+import { addEvent } from "./actions";
+
+export default function AddEventForm({ todayStr }: { todayStr: string }) {
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const result = await addEvent(new FormData(e.currentTarget));
+
+    setLoading(false);
+    if ("error" in result) setError(result.error);
+    else e.currentTarget.reset();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <input name="title" required placeholder="Event title" className={inputClass} />
+      <input name="assigned_to" placeholder="Who (optional)" className={inputClass} />
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-500">Date</label>
+        <input name="date" type="date" required defaultValue={todayStr} className={inputClass} />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-500">Time (leave blank for all-day)</label>
+        <input name="time" type="time" className={inputClass} />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-500">Type</label>
+        <select name="event_type" defaultValue="general" className={inputClass}>
+          <option value="general">General</option>
+          <option value="birthday">🎂 Birthday</option>
+          <option value="appointment">🏥 Appointment</option>
+          <option value="holiday">🎉 Holiday</option>
+          <option value="school">🏫 School</option>
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-500">Repeat</label>
+        <select name="recurrence" defaultValue="none" className={inputClass}>
+          <option value="none">Does not repeat</option>
+          <option value="daily">Repeats daily</option>
+          <option value="weekly">Repeats weekly</option>
+          <option value="monthly">Repeats monthly</option>
+          <option value="yearly">Repeats yearly (e.g. birthdays)</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-500">Repeat until (leave blank for forever)</label>
+        <input name="recurrence_end" type="date" className={inputClass} />
+      </div>
+      <input name="location" placeholder="Location (optional)" className={inputClass} />
+      {error && <p className="text-sm text-red-600 sm:col-span-2">{error}</p>}
+      <button type="submit" disabled={loading} className={`${buttonClass} sm:col-span-2`}>
+        {loading ? "Adding..." : "Add event"}
+      </button>
+    </form>
+  );
+}

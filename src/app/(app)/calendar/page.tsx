@@ -13,17 +13,19 @@ import {
 } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { Card, PageHeader, buttonClass, inputClass } from "@/components/ui";
-import { addEvent, deleteEvent, updateGoogleCalendarUrl } from "./actions";
+import { Card, PageHeader } from "@/components/ui";
+import { deleteEvent, updateEvent, updateGoogleCalendarUrl } from "./actions";
 import FeedLink from "./feed-link";
 import EventPill from "./event-pill";
 import GoogleImportForm from "./google-import-form";
+import AddEventForm from "./add-event-form";
 import { fetchExternalEvents } from "@/lib/ics-import";
 
 type CalendarEvent = {
   id: string;
   title: string;
   location: string | null;
+  assigned_to: string | null;
   start_at: string;
   all_day: boolean;
   color: string;
@@ -57,13 +59,13 @@ function advance(date: Date, frequency: string): Date {
 
 /** Expands recurring events into individual occurrences that fall within [rangeStart, rangeEndExclusive). */
 function expandOccurrences(events: CalendarEvent[], rangeStart: Date, rangeEndExclusive: Date) {
-  const result: (CalendarEvent & { occurrenceKey: string; age: number | null })[] = [];
+  const result: (CalendarEvent & { occurrenceKey: string; age: number | null; anchorStartAt: string })[] = [];
 
   for (const e of events) {
     const originYear = new Date(e.start_at).getFullYear();
 
     if (e.recurrence === "none") {
-      result.push({ ...e, occurrenceKey: e.id, age: null });
+      result.push({ ...e, occurrenceKey: e.id, age: null, anchorStartAt: e.start_at });
       continue;
     }
 
@@ -80,6 +82,7 @@ function expandOccurrences(events: CalendarEvent[], rangeStart: Date, rangeEndEx
           start_at: occurrence.toISOString(),
           occurrenceKey: `${e.id}-${occurrence.toISOString()}`,
           age: age && age > 0 ? age : null,
+          anchorStartAt: e.start_at,
         });
       }
       occurrence = advance(occurrence, e.recurrence);
@@ -250,49 +253,7 @@ export default async function CalendarPage({
 
       <Card className="mb-8">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Add an event</h2>
-        <form action={addEvent} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <input name="title" required placeholder="Event title" className={inputClass} />
-          <input name="assigned_to" placeholder="Who (optional)" className={inputClass} />
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Date</label>
-            <input name="date" type="date" required defaultValue={todayStr} className={inputClass} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Time (leave blank for all-day)</label>
-            <input name="time" type="time" className={inputClass} />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Type</label>
-            <select name="event_type" defaultValue="general" className={inputClass}>
-              <option value="general">General</option>
-              <option value="birthday">🎂 Birthday</option>
-              <option value="appointment">🏥 Appointment</option>
-              <option value="holiday">🎉 Holiday</option>
-              <option value="school">🏫 School</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Repeat</label>
-            <select name="recurrence" defaultValue="none" className={inputClass}>
-              <option value="none">Does not repeat</option>
-              <option value="daily">Repeats daily</option>
-              <option value="weekly">Repeats weekly</option>
-              <option value="monthly">Repeats monthly</option>
-              <option value="yearly">Repeats yearly (e.g. birthdays)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Repeat until (leave blank for forever)</label>
-            <input name="recurrence_end" type="date" className={inputClass} />
-          </div>
-          <input name="location" placeholder="Location (optional)" className={inputClass} />
-          <button type="submit" className={`${buttonClass} sm:col-span-2`}>
-            Add event
-          </button>
-        </form>
+        <AddEventForm todayStr={todayStr} />
       </Card>
 
       <div className="mb-4 flex items-center justify-between">
@@ -359,7 +320,13 @@ export default async function CalendarPage({
                   </p>
                 ))}
                 {dayEvents.map((e) => (
-                  <EventPill key={e.occurrenceKey} event={e} icon={EVENT_TYPE_ICONS[e.event_type] ?? ""} deleteEvent={deleteEvent} />
+                  <EventPill
+                    key={e.occurrenceKey}
+                    event={e}
+                    icon={EVENT_TYPE_ICONS[e.event_type] ?? ""}
+                    deleteEvent={deleteEvent}
+                    updateEvent={updateEvent}
+                  />
                 ))}
               </div>
             </div>

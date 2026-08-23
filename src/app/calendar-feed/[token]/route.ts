@@ -8,6 +8,13 @@ function icsDateTime(d: Date): string {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
+// Event times are entered as household-local wall-clock time and stored the same way (this app
+// doesn't do timezone conversion), so emitting them as ICS "floating" time — no Z/TZID — makes each
+// calendar app show the same digits the user typed, instead of re-interpreting the stored value as UTC.
+function icsFloatingDateTime(d: Date): string {
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "");
+}
+
 function icsDate(d: Date): string {
   return icsDateTime(d).slice(0, 8);
 }
@@ -67,7 +74,7 @@ function eventToVevents(e: CalEvent): string[] {
     dtEnd.setDate(dtEnd.getDate() + 1);
     lines.push(`DTSTART;VALUE=DATE:${icsDate(start)}`, `DTEND;VALUE=DATE:${icsDate(dtEnd)}`);
   } else {
-    lines.push(`DTSTART:${icsDateTime(start)}`);
+    lines.push(`DTSTART:${icsFloatingDateTime(start)}`);
   }
 
   lines.push(`SUMMARY:${escapeIcs(e.title)}`);
