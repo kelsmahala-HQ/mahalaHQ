@@ -54,9 +54,13 @@ create table if not exists family_profiles (
   clothing_sizes text, -- free text e.g. "Shirt: 6, Pants: 6/7, Shoe: 12"
   schedule_notes text, -- free text weekly schedule / activities
   notes text,
+  avatar_path text, -- path within the "avatars" storage bucket
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Adds avatar_path to family_profiles for installs that ran an earlier version of this script.
+alter table family_profiles add column if not exists avatar_path text;
 
 -- ============================================================================
 -- Emergency contacts
@@ -89,9 +93,25 @@ create table if not exists calendar_events (
   all_day boolean not null default false,
   assigned_to text, -- family member display name
   color text not null default '#6366f1',
+  recurrence text not null default 'none' check (recurrence in ('none', 'daily', 'weekly', 'monthly', 'yearly')),
+  recurrence_end date,
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
+
+-- Adds recurrence to calendar_events for installs that ran an earlier version of this script.
+alter table calendar_events add column if not exists recurrence text not null default 'none';
+alter table calendar_events add column if not exists recurrence_end date;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'calendar_events_recurrence_check'
+  ) then
+    alter table calendar_events
+      add constraint calendar_events_recurrence_check
+      check (recurrence in ('none', 'daily', 'weekly', 'monthly', 'yearly'));
+  end if;
+end $$;
 
 -- ============================================================================
 -- Chores
@@ -291,3 +311,16 @@ drop policy if exists documents_storage_all on storage.objects;
 create policy documents_storage_all on storage.objects for all
   using (bucket_id = 'documents' and (storage.foldername(name))[1] in (select my_household_ids()::text))
   with check (bucket_id = 'documents' and (storage.foldername(name))[1] in (select my_household_ids()::text));
+
+-- ============================================================================
+-- Storage bucket for family member avatars
+-- ============================================================================
+
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', false)
+on conflict (id) do nothing;
+
+drop policy if exists avatars_storage_all on storage.objects;
+create policy avatars_storage_all on storage.objects for all
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] in (select my_household_ids()::text))
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] in (select my_household_ids()::text));

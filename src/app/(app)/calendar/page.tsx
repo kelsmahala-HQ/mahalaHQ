@@ -2,6 +2,8 @@ import Link from "next/link";
 import {
   addDays,
   addMonths,
+  addWeeks,
+  addYears,
   endOfMonth,
   endOfWeek,
   format,
@@ -13,6 +15,59 @@ import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, PageHeader, buttonClass, inputClass } from "@/components/ui";
 import { addEvent, deleteEvent } from "./actions";
+
+type CalendarEvent = {
+  id: string;
+  title: string;
+  location: string | null;
+  start_at: string;
+  all_day: boolean;
+  color: string;
+  recurrence: string;
+  recurrence_end: string | null;
+};
+
+function advance(date: Date, frequency: string): Date {
+  switch (frequency) {
+    case "daily":
+      return addDays(date, 1);
+    case "weekly":
+      return addWeeks(date, 1);
+    case "monthly":
+      return addMonths(date, 1);
+    case "yearly":
+      return addYears(date, 1);
+    default:
+      return date;
+  }
+}
+
+/** Expands recurring events into individual occurrences that fall within [rangeStart, rangeEndExclusive). */
+function expandOccurrences(events: CalendarEvent[], rangeStart: Date, rangeEndExclusive: Date) {
+  const result: (CalendarEvent & { occurrenceKey: string })[] = [];
+
+  for (const e of events) {
+    if (e.recurrence === "none") {
+      result.push({ ...e, occurrenceKey: e.id });
+      continue;
+    }
+
+    const recurrenceEnd = e.recurrence_end ? new Date(`${e.recurrence_end}T23:59:59`) : null;
+    let occurrence = new Date(e.start_at);
+    let guard = 0;
+
+    while (occurrence < rangeEndExclusive && guard < 3660) {
+      if (recurrenceEnd && occurrence > recurrenceEnd) break;
+      if (occurrence >= rangeStart) {
+        result.push({ ...e, start_at: occurrence.toISOString(), occurrenceKey: `${e.id}-${occurrence.toISOString()}` });
+      }
+      occurrence = advance(occurrence, e.recurrence);
+      guard++;
+    }
+  }
+
+  return result;
+}
 
 export default async function CalendarPage({
   searchParams,
@@ -27,6 +82,7 @@ export default async function CalendarPage({
   const monthEnd = endOfMonth(anchor);
   const gridStart = startOfWeek(monthStart);
   const gridEnd = endOfWeek(monthEnd);
+  const gridEndExclusive = addDays(gridEnd, 1);
 
   const days: Date[] = [];
   for (let d = gridStart; d <= gridEnd; d = addDays(d, 1)) days.push(d);
@@ -36,12 +92,14 @@ export default async function CalendarPage({
     .from("calendar_events")
     .select("*")
     .eq("household_id", household.householdId)
-    .gte("start_at", gridStart.toISOString())
-    .lte("start_at", addDays(gridEnd, 1).toISOString())
+    .lte("start_at", gridEndExclusive.toISOString())
+    .or(`recurrence.neq.none,start_at.gte.${gridStart.toISOString()}`)
     .order("start_at");
 
-  const eventsByDay = new Map<string, typeof events>();
-  for (const e of events ?? []) {
+  const occurrences = expandOccurrences((events ?? []) as CalendarEvent[], gridStart, gridEndExclusive);
+
+  const eventsByDay = new Map<string, typeof occurrences>();
+  for (const e of occurrences) {
     const key = e.start_at.slice(0, 10);
     if (!eventsByDay.has(key)) eventsByDay.set(key, []);
     eventsByDay.get(key)!.push(e);
@@ -62,6 +120,14 @@ export default async function CalendarPage({
           <input name="assigned_to" placeholder="Who (optional)" className={inputClass} />
           <input name="date" type="date" required defaultValue={todayStr} className={inputClass} />
           <input name="time" type="time" className={inputClass} />
+          <select name="recurrence" defaultValue="none" className={inputClass}>
+            <option value="none">Does not repeat</option>
+            <option value="daily">Repeats daily</option>
+            <option value="weekly">Repeats weekly</option>
+            <option value="monthly">Repeats monthly</option>
+            <option value="yearly">Repeats yearly</option>
+          </select>
+          <input name="recurrence_end" type="date" placeholder="Repeat until (optional)" className={inputClass} />
           <input name="location" placeholder="Location (optional)" className={`${inputClass} sm:col-span-2`} />
           <button type="submit" className={`${buttonClass} sm:col-span-2`}>
             Add event
@@ -100,14 +166,15 @@ export default async function CalendarPage({
               </p>
               <div className="space-y-1">
                 {dayEvents.map((e) => (
-                  <form key={e.id} action={deleteEvent}>
+                  <form key={e.occurrenceKey} action={deleteEvent}>
                     <input type="hidden" name="id" value={e.id} />
                     <button
-                      title="Click to remove"
+                      title={e.recurrence !== "none" ? "Click to remove this whole repeating series" : "Click to remove"}
                       className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium text-white"
                       style={{ backgroundColor: e.color }}
                     >
-                      {e.all_day ? "" : format(new Date(e.start_at), "h:mma ") }
+                      {e.recurrence !== "none" ? "↻ " : ""}
+                      {e.all_day ? "" : format(new Date(e.start_at), "h:mma ")}
                       {e.title}
                     </button>
                   </form>

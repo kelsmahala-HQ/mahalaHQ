@@ -9,6 +9,10 @@ Built with Next.js 16 + Supabase (Postgres, Auth, Storage). Not indexed by searc
 - **Debt tracking, not auto-pay.** You add debts and log payments manually. There's no bank linking (Plaid) or automated money movement — that requires real compliance/security work and shouldn't be bolted on casually. If you want to revisit that later (e.g. read-only balance syncing via Plaid), it's a separate project.
 - **Multi-user, household-scoped.** Everyone signs in with their own account and joins a household via an invite code. All data is scoped to your household with Postgres row-level security — one household can never see another's data.
 
+## Updating the database schema
+
+[supabase/schema.sql](supabase/schema.sql) is written to be safe to re-run any time it changes — re-paste the whole file into the Supabase SQL Editor and run it again after pulling code changes that mention new tables/columns. It only adds things that are missing; it won't touch or delete existing data.
+
 ## 1. Create a Supabase project (free tier is plenty)
 
 1. Go to [supabase.com](https://supabase.com) and create a new project.

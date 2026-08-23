@@ -29,9 +29,18 @@ export async function addProfile(formData: FormData) {
 }
 
 export async function updateProfile(formData: FormData) {
-  await requireHousehold();
+  const household = await requireHousehold();
   const supabase = await createClient();
   const id = formData.get("id") as string;
+
+  const avatarFile = formData.get("avatar") as File | null;
+  let avatarPath: string | undefined;
+
+  if (avatarFile && avatarFile.size > 0) {
+    const path = `${household.householdId}/${id}-${Date.now()}-${avatarFile.name}`;
+    const { error: uploadError } = await supabase.storage.from("avatars").upload(path, avatarFile);
+    if (!uploadError) avatarPath = path;
+  }
 
   await supabase
     .from("family_profiles")
@@ -49,6 +58,7 @@ export async function updateProfile(formData: FormData) {
       clothing_sizes: formData.get("clothing_sizes") as string,
       schedule_notes: formData.get("schedule_notes") as string,
       notes: formData.get("notes") as string,
+      ...(avatarPath ? { avatar_path: avatarPath } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -61,4 +71,10 @@ export async function deleteProfile(formData: FormData) {
   const supabase = await createClient();
   await supabase.from("family_profiles").delete().eq("id", formData.get("id") as string);
   revalidatePath("/family");
+}
+
+export async function getAvatarUrl(avatarPath: string) {
+  const supabase = await createClient();
+  const { data } = await supabase.storage.from("avatars").createSignedUrl(avatarPath, 60 * 60);
+  return data?.signedUrl ?? null;
 }

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, inputClass } from "@/components/ui";
-import { addProfile } from "./actions";
+import { addProfile, getAvatarUrl } from "./actions";
 import ProfileCard from "./profile-card";
 
 export default async function FamilyPage() {
@@ -12,6 +12,13 @@ export default async function FamilyPage() {
     .select("*")
     .eq("household_id", household.householdId)
     .order("member_name");
+
+  const profilesWithAvatars = await Promise.all(
+    (profiles ?? []).map(async (p) => ({
+      ...p,
+      avatarUrl: p.avatar_path ? await getAvatarUrl(p.avatar_path) : null,
+    }))
+  );
 
   return (
     <div>
@@ -31,11 +38,11 @@ export default async function FamilyPage() {
         </form>
       </Card>
 
-      {!profiles?.length ? (
+      {!profilesWithAvatars.length ? (
         <EmptyState message="No family members yet — add one above, then fill in details." />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {profiles.map((p) => (
+          {profilesWithAvatars.map((p) => (
             <ProfileCard key={p.id} profile={p} />
           ))}
         </div>

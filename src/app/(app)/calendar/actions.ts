@@ -14,6 +14,8 @@ export async function addEvent(formData: FormData) {
   const allDay = !time;
   const startAt = allDay ? `${date}T00:00:00` : `${date}T${time}:00`;
   const assignedTo = (formData.get("assigned_to") as string) || "";
+  const recurrence = (formData.get("recurrence") as string) || "none";
+  const recurrenceEnd = (formData.get("recurrence_end") as string) || null;
 
   await supabase.from("calendar_events").insert({
     household_id: household.householdId,
@@ -23,6 +25,8 @@ export async function addEvent(formData: FormData) {
     start_at: startAt,
     all_day: allDay,
     color: colorForName(assignedTo || "shared"),
+    recurrence,
+    recurrence_end: recurrence === "none" ? null : recurrenceEnd,
     created_by: household.userId,
   });
 
