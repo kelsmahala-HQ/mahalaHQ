@@ -25,8 +25,11 @@ cp .env.local.example .env.local
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-publishable-key
+SUPABASE_SECRET_KEY=your-secret-key
 ```
+
+The first two come from **Settings > API > Project URL / Publishable key** and are safe to expose in the browser. `SUPABASE_SECRET_KEY` comes from the **Secret keys** section on that same page — it must never get a `NEXT_PUBLIC_` prefix, and is only used server-side (in `src/app/onboarding/actions.ts`) to create/join a household after the server has already verified who's asking.
 
 ## 3. Run it locally
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type Result = { error: string } | { success: true };
 
@@ -15,7 +16,9 @@ export async function createHousehold(formData: FormData): Promise<Result> {
   const name = formData.get("name") as string;
   const displayName = formData.get("displayName") as string;
 
-  const { data: household, error: householdError } = await supabase
+  const admin = createAdminClient();
+
+  const { data: household, error: householdError } = await admin
     .from("households")
     .insert({ name })
     .select("id")
@@ -25,7 +28,7 @@ export async function createHousehold(formData: FormData): Promise<Result> {
     return { error: householdError?.message ?? "Could not create household." };
   }
 
-  const { error: memberError } = await supabase.from("household_members").insert({
+  const { error: memberError } = await admin.from("household_members").insert({
     household_id: household.id,
     user_id: user.id,
     display_name: displayName,
@@ -48,7 +51,9 @@ export async function joinHousehold(formData: FormData): Promise<Result> {
   const inviteCode = (formData.get("inviteCode") as string).trim();
   const displayName = formData.get("displayName") as string;
 
-  const { data: household, error: findError } = await supabase
+  const admin = createAdminClient();
+
+  const { data: household, error: findError } = await admin
     .from("households")
     .select("id")
     .eq("invite_code", inviteCode)
@@ -58,7 +63,7 @@ export async function joinHousehold(formData: FormData): Promise<Result> {
     return { error: "No household found with that invite code." };
   }
 
-  const { error: memberError } = await supabase.from("household_members").insert({
+  const { error: memberError } = await admin.from("household_members").insert({
     household_id: household.id,
     user_id: user.id,
     display_name: displayName,
