@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   title: "Family Portal",
   description: "Budgets, chores, calendar, and household info in one place.",
   robots: { index: false, follow: false },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Family Portal" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0d9488",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

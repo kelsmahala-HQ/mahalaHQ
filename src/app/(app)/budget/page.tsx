@@ -1,3 +1,4 @@
+import { endOfWeek, format, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
@@ -12,8 +13,10 @@ export default async function BudgetPage() {
   const supabase = await createClient();
 
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const weekStartDate = startOfWeek(now);
+  const weekEndDate = endOfWeek(now);
+  const weekStart = format(weekStartDate, "yyyy-MM-dd");
+  const weekEnd = format(weekEndDate, "yyyy-MM-dd");
 
   const [{ data: categories }, { data: transactions }] = await Promise.all([
     supabase.from("budget_categories").select("*").eq("household_id", household.householdId).order("name"),
@@ -21,8 +24,8 @@ export default async function BudgetPage() {
       .from("budget_transactions")
       .select("*, budget_categories(name, type)")
       .eq("household_id", household.householdId)
-      .gte("occurred_on", monthStart)
-      .lte("occurred_on", monthEnd)
+      .gte("occurred_on", weekStart)
+      .lte("occurred_on", weekEnd)
       .order("occurred_on", { ascending: false }),
   ]);
 
@@ -38,7 +41,10 @@ export default async function BudgetPage() {
 
   return (
     <div>
-      <PageHeader title="Budget" subtitle={`This month: ${now.toLocaleString("en-US", { month: "long", year: "numeric" })}`} />
+      <PageHeader
+        title="Budget"
+        subtitle={`This week: ${format(weekStartDate, "MMM d")} – ${format(weekEndDate, "MMM d, yyyy")}`}
+      />
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
@@ -64,7 +70,7 @@ export default async function BudgetPage() {
               <option value="expense">Expense</option>
               <option value="income">Income</option>
             </select>
-            <input name="monthly_limit" type="number" step="0.01" placeholder="Monthly budget (optional)" className={inputClass} />
+            <input name="monthly_limit" type="number" step="0.01" placeholder="Weekly budget (optional)" className={inputClass} />
             <button type="submit" className={buttonClass}>
               Add category
             </button>
@@ -108,7 +114,7 @@ export default async function BudgetPage() {
                         {c.name} <span className="text-xs font-normal text-slate-400">({c.type})</span>
                       </p>
                       <p className="text-sm text-slate-500">
-                        {currency(spent)} {limit ? `of ${currency(limit)}` : "spent this month"}
+                        {currency(spent)} {limit ? `of ${currency(limit)}` : "spent this week"}
                       </p>
                     </div>
                     <form action={deleteCategory}>
@@ -133,9 +139,9 @@ export default async function BudgetPage() {
         <EmptyState message="No budget categories yet." />
       )}
 
-      <h2 className="mb-3 text-sm font-semibold text-slate-700">Transactions this month</h2>
+      <h2 className="mb-3 text-sm font-semibold text-slate-700">Transactions this week</h2>
       {!transactions?.length ? (
-        <EmptyState message="No transactions logged this month." />
+        <EmptyState message="No transactions logged this week." />
       ) : (
         <div className="space-y-2">
           {transactions.map((t) => (
