@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { addMonths, addWeeks, addYears, endOfWeek, format, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, PageHeader } from "@/components/ui";
@@ -7,6 +8,43 @@ import SitterDashboard from "./sitter-dashboard";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+// Pay periods run Friday -> Thursday, matching the Budget page.
+const PAY_PERIOD_OPTS = { weekStartsOn: 5 as const };
+
+function advanceBill(date: Date, frequency: string): Date {
+  switch (frequency) {
+    case "weekly":
+      return addWeeks(date, 1);
+    case "biweekly":
+      return addWeeks(date, 2);
+    case "monthly":
+      return addMonths(date, 1);
+    case "quarterly":
+      return addMonths(date, 3);
+    case "semiannual":
+      return addMonths(date, 6);
+    case "yearly":
+      return addYears(date, 1);
+    default:
+      return date; // 'once'
+  }
+}
+
+function occurrenceInPeriod(bill: { due_date: string; frequency: string }, periodStart: Date, periodEnd: Date): Date | null {
+  if (bill.frequency === "once") {
+    const d = new Date(`${bill.due_date}T00:00:00`);
+    return d >= periodStart && d <= periodEnd ? d : null;
+  }
+  let occurrence = new Date(`${bill.due_date}T00:00:00`);
+  let guard = 0;
+  while (occurrence <= periodEnd && guard < 500) {
+    if (occurrence >= periodStart) return occurrence;
+    occurrence = advanceBill(occurrence, bill.frequency);
+    guard++;
+  }
+  return null;
 }
 
 export default async function DashboardPage() {
@@ -18,6 +56,10 @@ export default async function DashboardPage() {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
   const weekAhead = new Date(now.getTime() + 7 * 86400000).toISOString();
+  const periodStartDate = startOfWeek(now, PAY_PERIOD_OPTS);
+  const periodEndDate = endOfWeek(now, PAY_PERIOD_OPTS);
+  const periodStart = format(periodStartDate, "yyyy-MM-dd");
+  const periodEnd = format(periodEndDate, "yyyy-MM-dd");
 
   const [
     { data: upcomingEvents },
@@ -25,6 +67,12 @@ export default async function DashboardPage() {
     { count: groceryCount },
     { data: overdueMaintenance },
     { data: debts },
+    { data: bills },
+    { data: billPayments },
+    { data: roundupSettings },
+    { data: focusDebt },
+    { data: roundupPurchases },
+    { data: roundupPayouts },
   ] = await Promise.all([
     supabase
       .from("calendar_events")
@@ -53,9 +101,41 @@ export default async function DashboardPage() {
       .lt("next_due_at", todayStr)
       .order("next_due_at"),
     supabase.from("debts").select("current_balance").eq("household_id", household.householdId),
+    supabase.from("bills").select("*").eq("household_id", household.householdId),
+    supabase
+      .from("bill_payments")
+      .select("bill_id")
+      .eq("household_id", household.householdId)
+      .gte("paid_on", periodStart)
+      .lte("paid_on", periodEnd),
+    supabase.from("roundup_settings").select("*").eq("household_id", household.householdId).maybeSingle(),
+    supabase
+      .from("debts")
+      .select("id, name")
+      .eq("household_id", household.householdId)
+      .eq("is_focus", true)
+      .maybeSingle(),
+    supabase.from("roundup_purchases").select("round_up").eq("household_id", household.householdId),
+    supabase.from("roundup_payouts").select("amount").eq("household_id", household.householdId),
   ]);
 
   const totalDebt = (debts ?? []).reduce((sum, d) => sum + Number(d.current_balance), 0);
+
+  const paidBillIds = new Set((billPayments ?? []).map((p) => p.bill_id));
+  const billsThisPeriod = (bills ?? [])
+    .map((b) => ({ ...b, occurrence: occurrenceInPeriod(b, periodStartDate, periodEndDate) }))
+    .filter((b) => b.occurrence !== null)
+    .sort((a, b) => a.occurrence!.getTime() - b.occurrence!.getTime());
+  const plannedIncome = billsThisPeriod.filter((b) => b.type === "income").reduce((sum, b) => sum + Number(b.amount), 0);
+  const plannedExpense = billsThisPeriod.filter((b) => b.type === "expense").reduce((sum, b) => sum + Number(b.amount), 0);
+  const unallocated = plannedIncome - plannedExpense;
+  const unpaidBillsThisPeriod = billsThisPeriod.filter((b) => b.type === "expense" && !paidBillIds.has(b.id));
+
+  const roundupThreshold = Number(roundupSettings?.threshold ?? 25);
+  const roundupSaved = (roundupPurchases ?? []).reduce((sum, p) => sum + Number(p.round_up), 0);
+  const roundupPaidOut = (roundupPayouts ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
+  const roundupAvailable = Math.max(0, roundupSaved - roundupPaidOut);
+  const roundupPct = roundupThreshold > 0 ? Math.min(100, Math.round((roundupAvailable / roundupThreshold) * 100)) : 0;
 
   return (
     <div>
@@ -129,6 +209,56 @@ export default async function DashboardPage() {
               ))}
             </ul>
           )}
+        </Card>
+
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">This pay period</h2>
+            <Link href="/budget" className="text-xs text-teal-600 hover:underline">
+              View budget
+            </Link>
+          </div>
+          <p className="mb-3 text-xs text-slate-400">
+            {format(periodStartDate, "MMM d")} – {format(periodEndDate, "MMM d")}
+          </p>
+          <div className="mb-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+            <span className="text-sm text-slate-500">Unallocated</span>
+            <span className={`text-lg font-semibold ${unallocated < 0 ? "text-red-600" : "text-slate-900"}`}>
+              {currency(unallocated)}
+            </span>
+          </div>
+          {!unpaidBillsThisPeriod.length ? (
+            <p className="text-sm text-slate-400">Nothing left to pay this period. 🎉</p>
+          ) : (
+            <ul className="space-y-2">
+              {unpaidBillsThisPeriod.slice(0, 4).map((b) => (
+                <li key={b.id} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-900">{b.name}</span>
+                  <span className="text-slate-400">
+                    {currency(Number(b.amount))} · due {format(b.occurrence!, "MMM d")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">Round-Up</h2>
+            <Link href="/roundup" className="text-xs text-teal-600 hover:underline">
+              View round-up
+            </Link>
+          </div>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm text-slate-500">{focusDebt ? `Toward ${focusDebt.name}` : "No focus debt set"}</span>
+            <span className="text-sm text-slate-500">
+              {currency(roundupAvailable)} / {currency(roundupThreshold)}
+            </span>
+          </div>
+          <div className="h-3 w-full rounded-full bg-slate-100">
+            <div className="h-3 rounded-full bg-yellow-400" style={{ width: `${roundupPct}%` }} />
+          </div>
         </Card>
 
         <Card className="lg:col-span-2">
