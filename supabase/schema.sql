@@ -20,9 +20,13 @@ create table if not exists household_members (
   display_name text not null,
   role text not null default 'adult' check (role in ('admin', 'adult', 'kid')),
   avatar_color text not null default '#6366f1',
+  phone text,
   created_at timestamptz not null default now(),
   unique (household_id, user_id)
 );
+
+-- Adds phone to household_members for installs that ran an earlier version of this script.
+alter table household_members add column if not exists phone text;
 
 -- Helper: households the current user belongs to. Used by every RLS policy below.
 create or replace function my_household_ids()
