@@ -102,13 +102,18 @@ export default function PaidCheckbox({
   }
 
   return (
-    <label className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 hover:border-teal-200">
+    // Plain div, not a <label> -- this row also contains other interactive controls (the move-week
+    // date input, amount editor, buttons), and a label wrapping a checkbox PLUS other form controls
+    // is unreliable across browsers: interacting with the nested date input could also toggle the
+    // checkbox, which reloads the whole page and wipes out whatever was mid-edit (e.g. the open
+    // date field). The checkbox handles its own click/tap target instead.
+    <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 hover:border-teal-200">
       <input
         type="checkbox"
         checked={!!paid}
         disabled={pending}
         onChange={togglePaid}
-        className="h-5 w-5 shrink-0 cursor-pointer accent-teal-600"
+        className="h-6 w-6 shrink-0 cursor-pointer accent-teal-600"
       />
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-medium ${paid ? "text-slate-400 line-through" : "text-slate-900"}`}>
@@ -200,6 +205,6 @@ export default function PaidCheckbox({
           ✏️
         </button>
       </div>
-    </label>
+    </div>
   );
 }
