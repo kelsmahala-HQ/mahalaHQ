@@ -250,14 +250,42 @@ create table if not exists roundup_purchases (
   household_id uuid not null references households(id) on delete cascade,
   amount numeric(10, 2) not null,
   round_up numeric(10, 2) not null,
+  source text not null default 'manual' check (source in ('manual', 'plaid')),
+  plaid_transaction_id text unique, -- prevents importing the same synced transaction twice
+  merchant_name text,
   created_at timestamptz not null default now()
 );
+
+-- Adds columns to roundup_purchases for installs that ran an earlier version of this script.
+alter table roundup_purchases add column if not exists source text not null default 'manual';
+alter table roundup_purchases add column if not exists plaid_transaction_id text;
+alter table roundup_purchases add column if not exists merchant_name text;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'roundup_purchases_plaid_transaction_id_key') then
+    alter table roundup_purchases add constraint roundup_purchases_plaid_transaction_id_key unique (plaid_transaction_id);
+  end if;
+end $$;
 
 create table if not exists roundup_payouts (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references households(id) on delete cascade,
   debt_id uuid references debts(id) on delete set null,
   amount numeric(10, 2) not null,
+  created_at timestamptz not null default now()
+);
+
+-- ============================================================================
+-- Plaid bank connections (server-only access -- see src/lib/plaid.ts)
+-- ============================================================================
+
+create table if not exists plaid_items (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  item_id text not null unique,
+  access_token text not null, -- never selected/returned to the browser; server-side use only
+  institution_name text,
+  cursor text, -- pagination cursor for /transactions/sync
   created_at timestamptz not null default now()
 );
 
@@ -281,6 +309,11 @@ alter table debt_payments enable row level security;
 alter table roundup_settings enable row level security;
 alter table roundup_purchases enable row level security;
 alter table roundup_payouts enable row level security;
+
+-- plaid_items intentionally gets NO policies: RLS is enabled with zero grants, so it's
+-- completely inaccessible via the anon/authenticated client no matter what the app code
+-- does. It's only ever touched server-side via the secret-key admin client (src/lib/supabase/admin.ts).
+alter table plaid_items enable row level security;
 
 -- households: visible to members; any authenticated user may create one (onboarding)
 drop policy if exists households_select on households;

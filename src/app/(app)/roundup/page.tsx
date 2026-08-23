@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireHousehold } from "@/lib/household";
-import { Card, EmptyState, PageHeader, buttonClass, inputClass } from "@/components/ui";
+import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { calculateRoundUp } from "@/lib/roundup";
 import { addPurchase, sendPayout, updateSettings } from "./actions";
+import { removePlaidItem, syncTransactions } from "./plaid-actions";
+import PlaidLinkButton from "./plaid-link-button";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -12,17 +15,29 @@ function currency(n: number) {
 export default async function RoundupPage() {
   const household = await requireHousehold();
   const supabase = await createClient();
+  const admin = createAdminClient();
 
-  const [{ data: settingsRow }, { data: focusDebt }, { data: purchases }, { data: payouts }] = await Promise.all([
-    supabase.from("roundup_settings").select("*").eq("household_id", household.householdId).maybeSingle(),
-    supabase.from("debts").select("id, name, current_balance").eq("household_id", household.householdId).eq("is_focus", true).maybeSingle(),
-    supabase
-      .from("roundup_purchases")
-      .select("*")
-      .eq("household_id", household.householdId)
-      .order("created_at", { ascending: false }),
-    supabase.from("roundup_payouts").select("amount").eq("household_id", household.householdId),
-  ]);
+  const [{ data: settingsRow }, { data: focusDebt }, { data: purchases }, { data: payouts }, { data: plaidItems }] =
+    await Promise.all([
+      supabase.from("roundup_settings").select("*").eq("household_id", household.householdId).maybeSingle(),
+      supabase
+        .from("debts")
+        .select("id, name, current_balance")
+        .eq("household_id", household.householdId)
+        .eq("is_focus", true)
+        .maybeSingle(),
+      supabase
+        .from("roundup_purchases")
+        .select("*")
+        .eq("household_id", household.householdId)
+        .order("created_at", { ascending: false }),
+      supabase.from("roundup_payouts").select("amount").eq("household_id", household.householdId),
+      admin
+        .from("plaid_items")
+        .select("id, institution_name, created_at")
+        .eq("household_id", household.householdId)
+        .order("created_at"),
+    ]);
 
   const multiplier = Number(settingsRow?.multiplier ?? 2);
   const threshold = Number(settingsRow?.threshold ?? 25);
@@ -74,9 +89,44 @@ export default async function RoundupPage() {
         )}
       </Card>
 
+      <Card className="mb-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">Connected banks</h2>
+          {!!plaidItems?.length && (
+            <form action={syncTransactions}>
+              <button className="rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-100">
+                Sync transactions now
+              </button>
+            </form>
+          )}
+        </div>
+
+        {!plaidItems?.length ? (
+          <div>
+            <p className="mb-3 text-sm text-slate-500">
+              Connect a bank to automatically pull in purchases instead of logging them by hand.
+            </p>
+            <PlaidLinkButton />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {plaidItems.map((item) => (
+              <div key={item.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-sm text-slate-900">{item.institution_name ?? "Bank account"}</span>
+                <form action={removePlaidItem}>
+                  <input type="hidden" name="id" value={item.id} />
+                  <button className={iconButtonClass}>Disconnect</button>
+                </form>
+              </div>
+            ))}
+            <PlaidLinkButton />
+          </div>
+        )}
+      </Card>
+
       <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Log a purchase</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">Log a purchase manually</h2>
           <form action={addPurchase} className="grid grid-cols-1 gap-3">
             <input name="amount" type="number" step="0.01" min="0.01" required placeholder="Purchase amount" className={inputClass} />
             <button type="submit" className={buttonClass}>
@@ -113,7 +163,10 @@ export default async function RoundupPage() {
         <div className="space-y-2">
           {purchases.slice(0, 15).map((p) => (
             <Card key={p.id} className="flex items-center justify-between !p-3">
-              <span className="text-sm text-slate-900">{currency(Number(p.amount))}</span>
+              <span className="text-sm text-slate-900">
+                {p.merchant_name || currency(Number(p.amount))}
+                {p.merchant_name && <span className="text-slate-400"> · {currency(Number(p.amount))}</span>}
+              </span>
               <span className="text-sm font-medium text-yellow-700">+{currency(Number(p.round_up))}</span>
               <span className="text-xs text-slate-400">{new Date(p.created_at).toLocaleDateString()}</span>
             </Card>
