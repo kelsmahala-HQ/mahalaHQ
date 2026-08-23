@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
+import { applyDebtPayment } from "@/lib/debt-payment";
 
 export async function addDebt(formData: FormData) {
   const household = await requireHousehold();
@@ -36,18 +37,22 @@ export async function logPayment(formData: FormData) {
   const debtId = formData.get("debt_id") as string;
   const amount = Number(formData.get("amount"));
 
-  await supabase.from("debt_payments").insert({
-    debt_id: debtId,
-    amount,
-    paid_on: (formData.get("paid_on") as string) || new Date().toISOString().slice(0, 10),
+  await applyDebtPayment(supabase, debtId, amount, {
     note: formData.get("note") as string,
+    paidOn: formData.get("paid_on") as string,
   });
 
-  const { data: debt } = await supabase.from("debts").select("current_balance").eq("id", debtId).single();
-  if (debt) {
-    const newBalance = Math.max(0, Number(debt.current_balance) - amount);
-    await supabase.from("debts").update({ current_balance: newBalance }).eq("id", debtId);
-  }
+  revalidatePath("/debts");
+}
+
+export async function setFocusDebt(formData: FormData) {
+  const household = await requireHousehold();
+  const supabase = await createClient();
+  const debtId = formData.get("id") as string;
+
+  await supabase.from("debts").update({ is_focus: false }).eq("household_id", household.householdId);
+  await supabase.from("debts").update({ is_focus: true }).eq("id", debtId);
 
   revalidatePath("/debts");
+  revalidatePath("/roundup");
 }

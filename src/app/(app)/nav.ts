@@ -9,6 +9,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/budget", label: "Budget", icon: "💰" },
       { href: "/debts", label: "Debts", icon: "📉" },
+      { href: "/roundup", label: "Round-Up", icon: "🪙" },
     ],
   },
   {

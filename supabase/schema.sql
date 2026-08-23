@@ -218,8 +218,12 @@ create table if not exists debts (
   minimum_payment numeric(12, 2),
   due_day integer check (due_day between 1 and 31),
   notes text,
+  is_focus boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+-- Adds is_focus to debts for installs that ran an earlier version of this script.
+alter table debts add column if not exists is_focus boolean not null default false;
 
 create table if not exists debt_payments (
   id uuid primary key default gen_random_uuid(),
@@ -227,6 +231,33 @@ create table if not exists debt_payments (
   amount numeric(12, 2) not null,
   paid_on date not null default current_date,
   note text,
+  created_at timestamptz not null default now()
+);
+
+-- ============================================================================
+-- Round-up tracker (spare-change savings toward the focus debt)
+-- ============================================================================
+
+create table if not exists roundup_settings (
+  household_id uuid primary key references households(id) on delete cascade,
+  multiplier numeric(4, 2) not null default 2,
+  threshold numeric(10, 2) not null default 25,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists roundup_purchases (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  amount numeric(10, 2) not null,
+  round_up numeric(10, 2) not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists roundup_payouts (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  debt_id uuid references debts(id) on delete set null,
+  amount numeric(10, 2) not null,
   created_at timestamptz not null default now()
 );
 
@@ -247,6 +278,9 @@ alter table budget_categories enable row level security;
 alter table budget_transactions enable row level security;
 alter table debts enable row level security;
 alter table debt_payments enable row level security;
+alter table roundup_settings enable row level security;
+alter table roundup_purchases enable row level security;
+alter table roundup_payouts enable row level security;
 
 -- households: visible to members; any authenticated user may create one (onboarding)
 drop policy if exists households_select on households;
@@ -281,7 +315,8 @@ declare
   tables text[] := array[
     'family_profiles', 'emergency_contacts', 'calendar_events', 'chores',
     'maintenance_tasks', 'grocery_items', 'documents',
-    'budget_categories', 'budget_transactions', 'debts'
+    'budget_categories', 'budget_transactions', 'debts',
+    'roundup_settings', 'roundup_purchases', 'roundup_payouts'
   ];
 begin
   foreach t in array tables loop

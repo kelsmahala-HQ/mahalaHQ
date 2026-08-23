@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
-import { addDebt, deleteDebt, logPayment } from "./actions";
+import { addDebt, deleteDebt, logPayment, setFocusDebt } from "./actions";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -25,6 +26,16 @@ export default async function DebtsPage() {
         title="Debts"
         subtitle="Track balances and payoff progress. Payments are logged manually — no bank linking or auto-pay."
       />
+
+      <Card className="mb-8 !bg-yellow-50">
+        <p className="text-sm text-slate-700">
+          Mark one debt as your <strong>focus</strong> (⭐) — that&rsquo;s the one your{" "}
+          <Link href="/roundup" className="font-medium text-teal-700 underline">
+            Round-Up tracker
+          </Link>{" "}
+          sends spare change toward.
+        </p>
+      </Card>
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
@@ -61,20 +72,32 @@ export default async function DebtsPage() {
             const current = Number(d.current_balance);
             const paidPct = original > 0 ? Math.min(100, Math.round(((original - current) / original) * 100)) : 0;
             return (
-              <Card key={d.id}>
+              <Card key={d.id} className={d.is_focus ? "ring-2 ring-yellow-400" : ""}>
                 <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-slate-900">{d.name}</p>
-                    <p className="text-sm text-slate-500">
-                      {[
-                        d.creditor,
-                        d.interest_rate ? `${d.interest_rate}% APR` : null,
-                        d.minimum_payment ? `min ${currency(Number(d.minimum_payment))}` : null,
-                        d.due_day ? `due day ${d.due_day}` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <form action={setFocusDebt}>
+                      <input type="hidden" name="id" value={d.id} />
+                      <button
+                        type="submit"
+                        title={d.is_focus ? "Current focus debt" : "Make this the focus debt"}
+                        className={`text-lg ${d.is_focus ? "" : "opacity-30 hover:opacity-70"}`}
+                      >
+                        ⭐
+                      </button>
+                    </form>
+                    <div>
+                      <p className="font-medium text-slate-900">{d.name}</p>
+                      <p className="text-sm text-slate-500">
+                        {[
+                          d.creditor,
+                          d.interest_rate ? `${d.interest_rate}% APR` : null,
+                          d.minimum_payment ? `min ${currency(Number(d.minimum_payment))}` : null,
+                          d.due_day ? `due day ${d.due_day}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
                   </div>
                   <form action={deleteDebt}>
                     <input type="hidden" name="id" value={d.id} />
