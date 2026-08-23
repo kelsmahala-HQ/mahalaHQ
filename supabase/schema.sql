@@ -25,6 +25,10 @@ begin
   end if;
 end $$;
 
+-- Optional external calendar (e.g. a Google Calendar's "Secret address in iCal format") whose
+-- events are fetched read-only and overlaid on the household's own calendar view.
+alter table households add column if not exists google_calendar_url text;
+
 create table if not exists household_members (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references households(id) on delete cascade,

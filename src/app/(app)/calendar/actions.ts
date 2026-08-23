@@ -41,3 +41,15 @@ export async function deleteEvent(formData: FormData) {
   await supabase.from("calendar_events").delete().eq("id", formData.get("id") as string);
   revalidatePath("/calendar");
 }
+
+export async function updateGoogleCalendarUrl(formData: FormData) {
+  const household = await requireHousehold();
+  if (household.role !== "admin" && household.role !== "adult") return;
+  const supabase = await createClient();
+  const url = ((formData.get("google_calendar_url") as string) || "").trim();
+  await supabase
+    .from("households")
+    .update({ google_calendar_url: url || null })
+    .eq("id", household.householdId);
+  revalidatePath("/calendar");
+}

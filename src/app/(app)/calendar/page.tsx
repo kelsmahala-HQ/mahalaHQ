@@ -14,8 +14,11 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, PageHeader, buttonClass, inputClass } from "@/components/ui";
-import { addEvent, deleteEvent } from "./actions";
+import { addEvent, deleteEvent, updateGoogleCalendarUrl } from "./actions";
 import FeedLink from "./feed-link";
+import EventPill from "./event-pill";
+import GoogleImportForm from "./google-import-form";
+import { fetchExternalEvents } from "@/lib/ics-import";
 
 type CalendarEvent = {
   id: string;
@@ -152,6 +155,20 @@ function mergeBillMaps(a: Map<string, BillDue[]>, b: Map<string, BillDue[]>) {
   return a;
 }
 
+type ChoreDue = { key: string; title: string; assigned_to: string | null };
+
+/** Open chores with a due_date, one pill on that single date — chores don't auto-generate future occurrences. */
+function choresDueByDay(chores: { id: string; title: string; assigned_to: string | null; due_date: string | null; status: string }[]) {
+  const map = new Map<string, ChoreDue[]>();
+  for (const c of chores) {
+    if (c.status === "done" || !c.due_date) continue;
+    const key = c.due_date;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push({ key: `${key}-chore-${c.id}`, title: c.title, assigned_to: c.assigned_to });
+  }
+  return map;
+}
+
 export default async function CalendarPage({
   searchParams,
 }: {
@@ -172,7 +189,8 @@ export default async function CalendarPage({
 
   const supabase = await createClient();
   const canSeeMoney = household.role === "admin" || household.role === "adult";
-  const [{ data: events }, { data: debts }, { data: billsTable }] = await Promise.all([
+  const isKid = household.role === "kid";
+  const [{ data: events }, { data: debts }, { data: billsTable }, { data: chores }, external] = await Promise.all([
     supabase
       .from("calendar_events")
       .select("*")
@@ -190,10 +208,30 @@ export default async function CalendarPage({
     canSeeMoney
       ? supabase.from("bills").select("name, frequency, due_date").eq("household_id", household.householdId)
       : Promise.resolve({ data: [] }),
+    (() => {
+      let query = supabase
+        .from("chores")
+        .select("id, title, assigned_to, assigned_member_id, due_date, status")
+        .eq("household_id", household.householdId)
+        .not("due_date", "is", null);
+      if (isKid) query = query.eq("assigned_member_id", household.memberId);
+      return query;
+    })(),
+    household.googleCalendarUrl
+      ? fetchExternalEvents(household.googleCalendarUrl, gridStart, gridEndExclusive)
+      : Promise.resolve({ occurrences: [], error: null }),
   ]);
 
   const occurrences = expandOccurrences((events ?? []) as CalendarEvent[], gridStart, gridEndExclusive);
   const bills = mergeBillMaps(billsDueByDay(debts ?? [], days), billsTableDueByDay(billsTable ?? [], gridStart, gridEndExclusive));
+  const choresByDay = choresDueByDay(chores ?? []);
+
+  const externalByDay = new Map<string, typeof external.occurrences>();
+  for (const ext of external.occurrences) {
+    const key = format(ext.startAt, "yyyy-MM-dd");
+    if (!externalByDay.has(key)) externalByDay.set(key, []);
+    externalByDay.get(key)!.push(ext);
+  }
 
   const eventsByDay = new Map<string, typeof occurrences>();
   for (const e of occurrences) {
@@ -277,6 +315,8 @@ export default async function CalendarPage({
           const key = format(day, "yyyy-MM-dd");
           const dayEvents = eventsByDay.get(key) ?? [];
           const dayBills = bills.get(key) ?? [];
+          const dayChores = choresByDay.get(key) ?? [];
+          const dayExternal = externalByDay.get(key) ?? [];
           const inMonth = day.getMonth() === monthStart.getMonth();
           const isToday = key === todayStr;
           return (
@@ -298,21 +338,28 @@ export default async function CalendarPage({
                     💳 {b.name} due
                   </Link>
                 ))}
+                {dayChores.map((c) => (
+                  <Link
+                    key={c.key}
+                    href="/chores"
+                    title={`Chore due — click to open Chores${c.assigned_to ? ` (${c.assigned_to})` : ""}`}
+                    className="block truncate rounded bg-yellow-500 px-1.5 py-0.5 text-left text-[11px] font-medium text-white"
+                  >
+                    🧹 {c.title}
+                  </Link>
+                ))}
+                {dayExternal.map((ext) => (
+                  <p
+                    key={ext.key}
+                    title={`From your Google Calendar${ext.allDay ? "" : ` — ${format(ext.startAt, "h:mma")}`}`}
+                    className="block truncate rounded bg-blue-500 px-1.5 py-0.5 text-left text-[11px] font-medium text-white"
+                  >
+                    {ext.allDay ? "" : `${format(ext.startAt, "h:mma")} `}
+                    {ext.title}
+                  </p>
+                ))}
                 {dayEvents.map((e) => (
-                  <form key={e.occurrenceKey} action={deleteEvent}>
-                    <input type="hidden" name="id" value={e.id} />
-                    <button
-                      title={e.recurrence !== "none" ? "Click to remove this whole repeating series" : "Click to remove"}
-                      className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium text-white"
-                      style={{ backgroundColor: e.color }}
-                    >
-                      {e.recurrence !== "none" ? "↻ " : ""}
-                      {EVENT_TYPE_ICONS[e.event_type] ? `${EVENT_TYPE_ICONS[e.event_type]} ` : ""}
-                      {e.all_day ? "" : format(new Date(e.start_at), "h:mma ")}
-                      {e.title}
-                      {e.age ? ` (turns ${e.age})` : ""}
-                    </button>
-                  </form>
+                  <EventPill key={e.occurrenceKey} event={e} icon={EVENT_TYPE_ICONS[e.event_type] ?? ""} deleteEvent={deleteEvent} />
                 ))}
               </div>
             </div>
@@ -330,6 +377,20 @@ export default async function CalendarPage({
             outside the app.
           </p>
           <FeedLink token={household.calendarFeedToken} />
+        </Card>
+      )}
+
+      {(household.role === "admin" || household.role === "adult") && (
+        <Card className="mt-8">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">📥 Import from Google Calendar</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            In Google Calendar: <strong>Settings → your calendar → Integrate calendar</strong>, copy the{" "}
+            <strong>Secret address in iCal format</strong>, and paste it below. Those events show up here in blue,
+            read-only — checked about once an hour. Only basic daily/weekly/monthly/yearly repeats are understood;
+            unusual custom repeats may not show every occurrence.
+          </p>
+          <GoogleImportForm currentUrl={household.googleCalendarUrl} action={updateGoogleCalendarUrl} />
+          {external.error && <p className="mt-2 text-xs text-red-500">{external.error}</p>}
         </Card>
       )}
     </div>
