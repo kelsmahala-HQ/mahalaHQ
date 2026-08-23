@@ -4,14 +4,14 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 
-export async function addBill(formData: FormData) {
+export async function addBill(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
   const frequency = (formData.get("frequency") as string) || "monthly";
   const amount = Number(formData.get("amount"));
   const dueDate = formData.get("due_date") as string;
 
-  const { data: bill } = await supabase
+  const { data: bill, error: billError } = await supabase
     .from("bills")
     .insert({
       household_id: household.householdId,
@@ -27,18 +27,22 @@ export async function addBill(formData: FormData) {
     .select("id")
     .single();
 
+  if (billError || !bill) return { error: billError?.message ?? "Could not add bill." };
+
   // A one-time bill is just a transaction -- record it as already paid immediately.
-  if (bill && frequency === "once") {
-    await supabase.from("bill_payments").insert({
+  if (frequency === "once") {
+    const { error: paymentError } = await supabase.from("bill_payments").insert({
       bill_id: bill.id,
       household_id: household.householdId,
       amount,
       paid_on: dueDate,
     });
+    if (paymentError) return { error: paymentError.message };
   }
 
   revalidatePath("/budget");
   revalidatePath("/calendar");
+  return { success: true };
 }
 
 export async function updateBill(formData: FormData) {

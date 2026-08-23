@@ -1,8 +1,9 @@
 import { addMonths, addWeeks, addYears, endOfWeek, format, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
-import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
-import { addBill, deleteBill, deleteBillPayment, markBillPaid, updateBill } from "./actions";
+import { Card, EmptyState, PageHeader, iconButtonClass, inputClass } from "@/components/ui";
+import { deleteBill, deleteBillPayment, markBillPaid, updateBill } from "./actions";
+import AddBillForm from "./add-bill-form";
 
 const CATEGORIES = [
   "Income",
@@ -148,37 +149,7 @@ export default async function BudgetPage() {
 
       <Card className="mb-8">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a bill</h2>
-        <form action={addBill} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <input name="name" required placeholder="Name (e.g. Electric, Kelsey's Paycheck)" className={`${inputClass} sm:col-span-2`} />
-          <select name="type" defaultValue="expense" className={inputClass}>
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-          </select>
-          <select name="category" defaultValue="Other" className={inputClass}>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <input name="amount" type="number" step="0.01" required placeholder="Amount" className={inputClass} />
-          <select name="frequency" defaultValue="monthly" className={inputClass}>
-            {Object.entries(FREQUENCY_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Due date (first/next occurrence)</label>
-            <input name="due_date" type="date" required defaultValue={format(now, "yyyy-MM-dd")} className={inputClass} />
-          </div>
-          <input name="assigned_to" placeholder="Who (optional)" className={inputClass} />
-          <input name="notes" placeholder="Notes (optional)" className={`${inputClass} sm:col-span-2`} />
-          <button type="submit" className={`${buttonClass} sm:col-span-2`}>
-            Add bill
-          </button>
-        </form>
+        <AddBillForm todayStr={format(now, "yyyy-MM-dd")} />
       </Card>
 
       <h2 className="mb-3 text-sm font-semibold text-slate-700">This period</h2>

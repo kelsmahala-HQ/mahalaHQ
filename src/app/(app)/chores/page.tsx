@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
-import { addChore, completeChore, deleteChore } from "./actions";
+import { Card, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
+import { completeChore, deleteChore } from "./actions";
+import AddChoreForm from "./add-chore-form";
 
 export default async function ChoresPage() {
   const household = await requireHousehold();
@@ -34,28 +35,7 @@ export default async function ChoresPage() {
       {canManage && (
         <Card className="mb-8">
           <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a chore</h2>
-          <form action={addChore} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <input name="title" required placeholder="Chore (e.g. Take out trash)" className={inputClass} />
-            <select name="assigned_member_id" className={inputClass} defaultValue="">
-              <option value="">Unassigned</option>
-              {members?.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.display_name}
-                </option>
-              ))}
-            </select>
-            <select name="frequency" className={inputClass} defaultValue="weekly">
-              <option value="once">One-time</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
-            <input name="points" type="number" min={0} placeholder="Points (optional)" className={inputClass} />
-            <input name="due_date" type="date" className={inputClass} />
-            <button type="submit" className={`${buttonClass} sm:col-span-2`}>
-              Add chore
-            </button>
-          </form>
+          <AddChoreForm members={members ?? []} />
         </Card>
       )}
 

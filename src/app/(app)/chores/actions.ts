@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 
-export async function addChore(formData: FormData) {
+export async function addChore(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
   const assignedMemberId = (formData.get("assigned_member_id") as string) || null;
@@ -19,7 +19,7 @@ export async function addChore(formData: FormData) {
     assignedTo = member?.display_name ?? null;
   }
 
-  await supabase.from("chores").insert({
+  const { error } = await supabase.from("chores").insert({
     household_id: household.householdId,
     title: formData.get("title") as string,
     assigned_member_id: assignedMemberId,
@@ -29,7 +29,10 @@ export async function addChore(formData: FormData) {
     due_date: (formData.get("due_date") as string) || null,
   });
 
+  if (error) return { error: error.message };
+
   revalidatePath("/chores");
+  return { success: true };
 }
 
 export async function completeChore(formData: FormData) {
