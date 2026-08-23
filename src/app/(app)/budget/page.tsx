@@ -30,8 +30,9 @@ const FREQUENCY_LABELS: Record<string, string> = {
   yearly: "Yearly",
 };
 
-// Pay periods run Saturday -> Friday, so a period starts the day after payday and ends on the next one.
-const PAY_PERIOD_OPTS = { weekStartsOn: 6 as const };
+// Pay periods run Friday -> Thursday: payday is the FIRST day of the period, so that
+// Friday's paycheck funds everything due from that Friday through the following Thursday.
+const PAY_PERIOD_OPTS = { weekStartsOn: 5 as const };
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -120,7 +121,7 @@ export default async function BudgetPage() {
     <div>
       <PageHeader
         title="Budget"
-        subtitle={`This pay period: ${format(periodStartDate, "MMM d")} – ${format(periodEndDate, "MMM d, yyyy")} (Sat–Fri, aligned to payday)`}
+        subtitle={`This pay period: ${format(periodStartDate, "MMM d")} – ${format(periodEndDate, "MMM d, yyyy")} (Fri–Thu, funded by that Friday's paycheck)`}
       />
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
