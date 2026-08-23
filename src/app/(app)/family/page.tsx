@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
-import { Card, EmptyState, PageHeader, buttonClass, inputClass } from "@/components/ui";
-import { addProfile, getAvatarUrl } from "./actions";
+import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { getAvatarUrl } from "./actions";
 import ProfileCard from "./profile-card";
+import AddProfileForm from "./add-profile-form";
 
 export default async function FamilyPage() {
   const household = await requireAdult();
@@ -28,21 +29,7 @@ export default async function FamilyPage() {
 
       <Card className="mb-8">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a family member</h2>
-        <form action={addProfile} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <input name="member_name" required placeholder="Name" className={inputClass} />
-          <input name="date_of_birth" type="date" className={inputClass} />
-          <select name="member_id" defaultValue="" className={`${inputClass} sm:col-span-2`}>
-            <option value="">Not linked to a login (e.g. a baby, or add details before they sign up)</option>
-            {members?.map((m) => (
-              <option key={m.id} value={m.id}>
-                Link to {m.display_name}&rsquo;s login
-              </option>
-            ))}
-          </select>
-          <button type="submit" className={`${buttonClass} sm:col-span-2`}>
-            Add family member
-          </button>
-        </form>
+        <AddProfileForm members={members ?? []} />
       </Card>
 
       {!profilesWithAvatars.length ? (

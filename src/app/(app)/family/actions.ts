@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 
-export async function addProfile(formData: FormData) {
+export async function addProfile(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
 
-  await supabase.from("family_profiles").insert({
+  const { error } = await supabase.from("family_profiles").insert({
     household_id: household.householdId,
     member_id: (formData.get("member_id") as string) || null,
     member_name: formData.get("member_name") as string,
@@ -26,10 +26,13 @@ export async function addProfile(formData: FormData) {
     notes: formData.get("notes") as string,
   });
 
+  if (error) return { error: error.message };
+
   revalidatePath("/family");
+  return { success: true };
 }
 
-export async function updateProfile(formData: FormData) {
+export async function updateProfile(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
   const id = formData.get("id") as string;
@@ -43,7 +46,7 @@ export async function updateProfile(formData: FormData) {
     if (!uploadError) avatarPath = path;
   }
 
-  await supabase
+  const { error } = await supabase
     .from("family_profiles")
     .update({
       member_name: formData.get("member_name") as string,
@@ -64,7 +67,10 @@ export async function updateProfile(formData: FormData) {
     })
     .eq("id", id);
 
+  if (error) return { error: error.message };
+
   revalidatePath("/family");
+  return { success: true };
 }
 
 export async function deleteProfile(formData: FormData) {
