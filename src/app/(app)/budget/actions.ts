@@ -18,6 +18,20 @@ export async function addCategory(formData: FormData) {
   revalidatePath("/budget");
 }
 
+export async function updateCategoryLimit(formData: FormData) {
+  await requireHousehold();
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+  const limit = formData.get("monthly_limit");
+
+  await supabase
+    .from("budget_categories")
+    .update({ monthly_limit: limit ? Number(limit) : null })
+    .eq("id", id);
+
+  revalidatePath("/budget");
+}
+
 export async function deleteCategory(formData: FormData) {
   await requireHousehold();
   const supabase = await createClient();

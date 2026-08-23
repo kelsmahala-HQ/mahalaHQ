@@ -2,21 +2,24 @@ import { endOfWeek, format, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
-import { addCategory, addTransaction, deleteCategory, deleteTransaction } from "./actions";
+import { addCategory, addTransaction, deleteCategory, deleteTransaction, updateCategoryLimit } from "./actions";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
+
+// Pay periods run Saturday -> Friday, so a period starts the day after payday and ends on the next one.
+const PAY_PERIOD_OPTS = { weekStartsOn: 6 as const };
 
 export default async function BudgetPage() {
   const household = await requireAdult();
   const supabase = await createClient();
 
   const now = new Date();
-  const weekStartDate = startOfWeek(now);
-  const weekEndDate = endOfWeek(now);
-  const weekStart = format(weekStartDate, "yyyy-MM-dd");
-  const weekEnd = format(weekEndDate, "yyyy-MM-dd");
+  const periodStartDate = startOfWeek(now, PAY_PERIOD_OPTS);
+  const periodEndDate = endOfWeek(now, PAY_PERIOD_OPTS);
+  const periodStart = format(periodStartDate, "yyyy-MM-dd");
+  const periodEnd = format(periodEndDate, "yyyy-MM-dd");
 
   const [{ data: categories }, { data: transactions }] = await Promise.all([
     supabase.from("budget_categories").select("*").eq("household_id", household.householdId).order("name"),
@@ -24,8 +27,8 @@ export default async function BudgetPage() {
       .from("budget_transactions")
       .select("*, budget_categories(name, type)")
       .eq("household_id", household.householdId)
-      .gte("occurred_on", weekStart)
-      .lte("occurred_on", weekEnd)
+      .gte("occurred_on", periodStart)
+      .lte("occurred_on", periodEnd)
       .order("occurred_on", { ascending: false }),
   ]);
 
@@ -39,14 +42,19 @@ export default async function BudgetPage() {
     else totalExpense += Number(t.amount);
   }
 
+  const totalAllocated = (categories ?? [])
+    .filter((c) => c.type === "expense" && c.monthly_limit)
+    .reduce((sum, c) => sum + Number(c.monthly_limit), 0);
+  const unallocated = totalIncome - totalAllocated;
+
   return (
     <div>
       <PageHeader
         title="Budget"
-        subtitle={`This week: ${format(weekStartDate, "MMM d")} – ${format(weekEndDate, "MMM d, yyyy")}`}
+        subtitle={`This pay period: ${format(periodStartDate, "MMM d")} – ${format(periodEndDate, "MMM d, yyyy")} (Sat–Fri, aligned to payday)`}
       />
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
         <Card>
           <p className="text-xs font-medium uppercase text-slate-400">Income</p>
           <p className="mt-1 text-2xl font-semibold text-teal-600">{currency(totalIncome)}</p>
@@ -59,6 +67,12 @@ export default async function BudgetPage() {
           <p className="text-xs font-medium uppercase text-slate-400">Net</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{currency(totalIncome - totalExpense)}</p>
         </Card>
+        <Card className={unallocated < 0 ? "!bg-red-50" : "!bg-yellow-50"}>
+          <p className="text-xs font-medium uppercase text-slate-400">Unallocated</p>
+          <p className={`mt-1 text-2xl font-semibold ${unallocated < 0 ? "text-red-600" : "text-slate-900"}`}>
+            {currency(unallocated)}
+          </p>
+        </Card>
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -70,7 +84,7 @@ export default async function BudgetPage() {
               <option value="expense">Expense</option>
               <option value="income">Income</option>
             </select>
-            <input name="monthly_limit" type="number" step="0.01" placeholder="Weekly budget (optional)" className={inputClass} />
+            <input name="monthly_limit" type="number" step="0.01" placeholder="Budget for this pay period (optional)" className={inputClass} />
             <button type="submit" className={buttonClass}>
               Add category
             </button>
@@ -101,6 +115,10 @@ export default async function BudgetPage() {
       {categories?.length ? (
         <div className="mb-8">
           <h2 className="mb-3 text-sm font-semibold text-slate-700">Categories</h2>
+          <p className="mb-3 text-xs text-slate-400">
+            Set each category&rsquo;s budget for <em>this</em> pay period — since Luke&rsquo;s and your paychecks aren&rsquo;t always the
+            same amount, adjust these as needed rather than expecting one number to fit every period.
+          </p>
           <div className="space-y-2">
             {categories.map((c) => {
               const spent = spentByCategory.get(c.id) ?? 0;
@@ -108,19 +126,35 @@ export default async function BudgetPage() {
               const pct = limit ? Math.min(100, Math.round((spent / limit) * 100)) : null;
               return (
                 <Card key={c.id} className="!p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="font-medium text-slate-900">
                         {c.name} <span className="text-xs font-normal text-slate-400">({c.type})</span>
                       </p>
                       <p className="text-sm text-slate-500">
-                        {currency(spent)} {limit ? `of ${currency(limit)}` : "spent this week"}
+                        {currency(spent)} {limit ? `of ${currency(limit)}` : "spent this period"}
                       </p>
                     </div>
-                    <form action={deleteCategory}>
-                      <input type="hidden" name="id" value={c.id} />
-                      <button className={iconButtonClass}>Remove</button>
-                    </form>
+                    <div className="flex items-center gap-2">
+                      <form action={updateCategoryLimit} className="flex items-center gap-1">
+                        <input type="hidden" name="id" value={c.id} />
+                        <input
+                          name="monthly_limit"
+                          type="number"
+                          step="0.01"
+                          defaultValue={c.monthly_limit ?? ""}
+                          placeholder="Budget"
+                          className={`${inputClass} w-24 !py-1 text-sm`}
+                        />
+                        <button type="submit" className="rounded-lg bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
+                          Save
+                        </button>
+                      </form>
+                      <form action={deleteCategory}>
+                        <input type="hidden" name="id" value={c.id} />
+                        <button className={iconButtonClass}>Remove</button>
+                      </form>
+                    </div>
                   </div>
                   {pct !== null && (
                     <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
@@ -139,9 +173,9 @@ export default async function BudgetPage() {
         <EmptyState message="No budget categories yet." />
       )}
 
-      <h2 className="mb-3 text-sm font-semibold text-slate-700">Transactions this week</h2>
+      <h2 className="mb-3 text-sm font-semibold text-slate-700">Transactions this pay period</h2>
       {!transactions?.length ? (
-        <EmptyState message="No transactions logged this week." />
+        <EmptyState message="No transactions logged this pay period." />
       ) : (
         <div className="space-y-2">
           {transactions.map((t) => (
