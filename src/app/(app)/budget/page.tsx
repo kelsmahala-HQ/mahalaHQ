@@ -52,10 +52,11 @@ export default async function BudgetPage({
   const incomeBills = billsThisPeriod.filter((b) => b.type === "income");
   const expenseBills = billsThisPeriod.filter((b) => b.type === "expense");
 
-  // Planned totals (everything due this week, whether checked off yet or not) so you can see up
-  // front whether the week is affordable, before marking anything paid.
-  const totalIncome = incomeBills.reduce((sum, b) => sum + Number(b.amount), 0);
-  const totalExpense = expenseBills.reduce((sum, b) => sum + Number(b.amount), 0);
+  // Everything due this week counts toward the total whether it's checked off yet or not, but
+  // once something's actually paid, its real amount (which may differ from the bill's usual
+  // amount) replaces the estimate.
+  const totalIncome = incomeBills.reduce((sum, b) => sum + (paidByBill.get(b.id)?.amount ?? Number(b.amount)), 0);
+  const totalExpense = expenseBills.reduce((sum, b) => sum + (paidByBill.get(b.id)?.amount ?? Number(b.amount)), 0);
   const remaining = totalIncome - totalExpense;
 
   const prevWeek = format(subWeeks(periodStartDate, 1), "yyyy-MM-dd");

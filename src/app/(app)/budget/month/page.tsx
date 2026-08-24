@@ -22,10 +22,18 @@ export default async function BudgetMonthPage({
   const monthStart = startOfMonth(anchor);
   const monthEnd = endOfMonth(anchor);
   const weeks = weeksInMonth(monthStart, monthEnd);
+  const rangeStart = format(weeks[0], "yyyy-MM-dd");
+  const rangeEnd = format(endOfWeek(weeks[weeks.length - 1], PAY_PERIOD_OPTS), "yyyy-MM-dd");
 
-  const [{ data: bills }, { data: reschedules }] = await Promise.all([
+  const [{ data: bills }, { data: reschedules }, { data: payments }] = await Promise.all([
     supabase.from("bills").select("*").eq("household_id", household.householdId),
     supabase.from("bill_reschedules").select("*").eq("household_id", household.householdId),
+    supabase
+      .from("bill_payments")
+      .select("bill_id, amount, paid_on")
+      .eq("household_id", household.householdId)
+      .gte("paid_on", rangeStart)
+      .lte("paid_on", rangeEnd),
   ]);
 
   const currentWeekStart = format(startOfWeek(new Date(), PAY_PERIOD_OPTS), "yyyy-MM-dd");
@@ -40,9 +48,19 @@ export default async function BudgetMonthPage({
       .filter((b): b is typeof b & { occurrence: Date } => b.occurrence !== null);
     const billsThisWeek = applyReschedules(bills ?? [], natural, reschedules ?? [], weekStart);
 
-    // Planned totals -- everything due that week, whether it's been paid yet or not.
-    const income = billsThisWeek.filter((b) => b.type === "income").reduce((sum, b) => sum + Number(b.amount), 0);
-    const expense = billsThisWeek.filter((b) => b.type === "expense").reduce((sum, b) => sum + Number(b.amount), 0);
+    const paidByBill = new Map<string, number>();
+    for (const p of payments ?? []) {
+      if (p.paid_on >= weekStartStr && p.paid_on <= weekEndStr) paidByBill.set(p.bill_id, Number(p.amount));
+    }
+
+    // Everything due that week counts whether it's been paid yet or not, but a bill's actual
+    // paid amount (once it has one) replaces the estimate.
+    const income = billsThisWeek
+      .filter((b) => b.type === "income")
+      .reduce((sum, b) => sum + (paidByBill.get(b.id) ?? Number(b.amount)), 0);
+    const expense = billsThisWeek
+      .filter((b) => b.type === "expense")
+      .reduce((sum, b) => sum + (paidByBill.get(b.id) ?? Number(b.amount)), 0);
 
     const tag = billsThisWeek
       .filter((b) => b.type === "income")
