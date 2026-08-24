@@ -54,11 +54,11 @@ export async function sendInviteEmail(formData: FormData): Promise<{ error: stri
   const resend = new Resend(process.env.RESEND_API_KEY);
 
   const { error } = await resend.emails.send({
-    from: "Family Portal <invites@mahalahq.org>",
+    from: "Mahala HQ <invites@mahalahq.org>",
     to: email,
     subject: `${household.displayName} invited you to join ${household.householdName}`,
     html: `
-      <p>${household.displayName} invited you to join <strong>${household.householdName}</strong> on Family Portal — a shared spot for budgets, chores, the calendar, and more.</p>
+      <p>${household.displayName} invited you to join <strong>${household.householdName}</strong> on Mahala HQ — a shared spot for budgets, chores, the calendar, and more.</p>
       <ol>
         <li>Go to <a href="${siteUrl}">${siteUrl}</a></li>
         <li>Sign up for an account</li>

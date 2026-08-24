@@ -15,7 +15,7 @@ export async function createLinkToken(): Promise<{ linkToken: string } | { error
   try {
     const response = await client.linkTokenCreate({
       user: { client_user_id: household.householdId },
-      client_name: "Family Portal",
+      client_name: "Mahala HQ",
       products: [Products.Transactions],
       country_codes: [CountryCode.Us],
       language: "en",

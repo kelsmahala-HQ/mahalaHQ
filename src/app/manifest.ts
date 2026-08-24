@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Family Portal",
-    short_name: "Family",
+    name: "Mahala HQ",
+    short_name: "Mahala HQ",
     description: "Budgets, chores, calendar, and household info in one place.",
     start_url: "/",
     display: "standalone",

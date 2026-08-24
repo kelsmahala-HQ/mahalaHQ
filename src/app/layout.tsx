@@ -13,10 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Family Portal",
+  title: "Mahala HQ",
   description: "Budgets, chores, calendar, and household info in one place.",
   robots: { index: false, follow: false },
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Family Portal" },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Mahala HQ" },
 };
 
 export const viewport: Viewport = {

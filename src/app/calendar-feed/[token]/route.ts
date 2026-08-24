@@ -114,7 +114,7 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
   const ics = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Family Portal//EN",
+    "PRODID:-//Mahala HQ//EN",
     "CALSCALE:GREGORIAN",
     `X-WR-CALNAME:${escapeIcs(household.name)}`,
     ...vevents,

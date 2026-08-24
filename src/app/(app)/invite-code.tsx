@@ -12,8 +12,8 @@ export default function InviteCode({ code, householdName }: { code: string; hous
   }
 
   const siteUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const subject = `Join ${householdName} on Family Portal`;
-  const body = `Hey! Join our household on Family Portal so we can keep track of chores, the calendar, and more together.\n\n1. Go to ${siteUrl}\n2. Sign up for an account\n3. Choose "Have an invite code? Join instead" and enter: ${code}`;
+  const subject = `Join ${householdName} on Mahala HQ`;
+  const body = `Hey! Join our household on Mahala HQ so we can keep track of chores, the calendar, and more together.\n\n1. Go to ${siteUrl}\n2. Sign up for an account\n3. Choose "Have an invite code? Join instead" and enter: ${code}`;
   const mailtoHref = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
   return (
