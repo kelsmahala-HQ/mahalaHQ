@@ -26,6 +26,7 @@ type CalendarEvent = {
   title: string;
   location: string | null;
   assigned_to: string | null;
+  assigned_member_id: string | null;
   start_at: string;
   all_day: boolean;
   color: string;
@@ -193,7 +194,7 @@ export default async function CalendarPage({
   const supabase = await createClient();
   const canSeeMoney = household.role === "admin" || household.role === "adult";
   const isKid = household.role === "kid";
-  const [{ data: events }, { data: debts }, { data: billsTable }, { data: chores }, external] = await Promise.all([
+  const [{ data: events }, { data: debts }, { data: billsTable }, { data: chores }, { data: familyMembers }, external] = await Promise.all([
     supabase
       .from("calendar_events")
       .select("*")
@@ -220,10 +221,13 @@ export default async function CalendarPage({
       if (isKid) query = query.eq("assigned_member_id", household.memberId);
       return query;
     })(),
+    supabase.from("family_profiles").select("id, member_name").eq("household_id", household.householdId).order("member_name"),
     household.googleCalendarUrl
       ? fetchExternalEvents(household.googleCalendarUrl, gridStart, gridEndExclusive)
       : Promise.resolve({ occurrences: [], error: null }),
   ]);
+
+  const members = familyMembers ?? [];
 
   const occurrences = expandOccurrences((events ?? []) as CalendarEvent[], gridStart, gridEndExclusive);
   const bills = mergeBillMaps(billsDueByDay(debts ?? [], days), billsTableDueByDay(billsTable ?? [], gridStart, gridEndExclusive));
@@ -253,7 +257,7 @@ export default async function CalendarPage({
 
       <Card className="mb-8">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Add an event</h2>
-        <AddEventForm todayStr={todayStr} />
+        <AddEventForm todayStr={todayStr} members={members} />
       </Card>
 
       <div className="mb-4 flex items-center justify-between">
@@ -324,6 +328,7 @@ export default async function CalendarPage({
                     key={e.occurrenceKey}
                     event={e}
                     icon={EVENT_TYPE_ICONS[e.event_type] ?? ""}
+                    members={members}
                     deleteEvent={deleteEvent}
                     updateEvent={updateEvent}
                   />

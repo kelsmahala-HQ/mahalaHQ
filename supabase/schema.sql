@@ -134,6 +134,10 @@ create table if not exists calendar_events (
 alter table calendar_events add column if not exists recurrence text not null default 'none';
 alter table calendar_events add column if not exists recurrence_end date;
 alter table calendar_events add column if not exists event_type text not null default 'general';
+
+-- Links an event to a real family_profiles row instead of only a free-typed name -- null means
+-- "whole family" (a shared event), matching the existing assigned_to="" convention.
+alter table calendar_events add column if not exists assigned_member_id uuid references family_profiles(id) on delete set null;
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'calendar_events_event_type_check') then

@@ -10,14 +10,15 @@ export default function AddChoreForm({ members }: { members: { id: string; displ
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError(null);
     setLoading(true);
 
-    const result = await addChore(new FormData(e.currentTarget));
+    const result = await addChore(new FormData(form));
 
     setLoading(false);
     if ("error" in result) setError(result.error);
-    else e.currentTarget.reset();
+    else form.reset();
   }
 
   return (

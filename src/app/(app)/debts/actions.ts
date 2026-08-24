@@ -13,7 +13,7 @@ function revalidateBudgetPaths() {
   revalidatePath("/budget/manage");
 }
 
-export async function addDebt(formData: FormData) {
+export async function addDebt(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
   const balance = Number(formData.get("current_balance"));
@@ -23,7 +23,7 @@ export async function addDebt(formData: FormData) {
   const dueDay = paymentFrequency === "monthly" && formData.get("due_day") ? Number(formData.get("due_day")) : null;
   const dueWeekday = paymentFrequency === "weekly" && formData.get("due_weekday") ? Number(formData.get("due_weekday")) : null;
 
-  const { data: debt } = await supabase
+  const { data: debt, error } = await supabase
     .from("debts")
     .insert({
       household_id: household.householdId,
@@ -40,28 +40,66 @@ export async function addDebt(formData: FormData) {
     .select("id, name, minimum_payment, payment_frequency, due_day, due_weekday")
     .single();
 
+  if (error) return { error: error.message };
+
   // Mirror the minimum payment into Budget as a bill, so it shows up in the weekly checklist
-  // without having to re-enter it in Manage Bills.
+  // without having to re-enter it in Manage Bills. Silently skips (not an error) if the debt
+  // doesn't have both a minimum payment and a due day/weekday -- the UI explains that case.
   if (debt) await syncDebtBill(supabase, household.householdId, debt);
 
   revalidateBudgetPaths();
+  return { success: true };
 }
 
 /** Manually mirrors an existing debt into Budget -- for debts added before the auto-sync existed. */
-export async function syncDebtToBill(formData: FormData) {
+export async function syncDebtToBill(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
   const debtId = formData.get("debt_id") as string;
 
-  const { data: debt } = await supabase
+  const { data: debt, error } = await supabase
     .from("debts")
     .select("id, name, minimum_payment, payment_frequency, due_day, due_weekday")
     .eq("id", debtId)
     .single();
 
-  if (debt) await syncDebtBill(supabase, household.householdId, debt);
+  if (error || !debt) return { error: error?.message ?? "Debt not found." };
+
+  const { synced } = await syncDebtBill(supabase, household.householdId, debt);
+  revalidateBudgetPaths();
+
+  if (!synced) return { error: "Add a minimum payment and a due day/weekday to this debt before syncing it to Budget." };
+  return { success: true };
+}
+
+export async function updateDebt(formData: FormData): Promise<{ error: string } | { success: true }> {
+  const household = await requireHousehold();
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  const paymentFrequency = (formData.get("payment_frequency") as string) || "monthly";
+  const minimumPayment = formData.get("minimum_payment") ? Number(formData.get("minimum_payment")) : null;
+  const dueDay = paymentFrequency === "monthly" && formData.get("due_day") ? Number(formData.get("due_day")) : null;
+  const dueWeekday = paymentFrequency === "weekly" && formData.get("due_weekday") ? Number(formData.get("due_weekday")) : null;
+
+  const { error } = await supabase
+    .from("debts")
+    .update({
+      name: formData.get("name") as string,
+      creditor: (formData.get("creditor") as string) || null,
+      interest_rate: formData.get("interest_rate") ? Number(formData.get("interest_rate")) : null,
+      minimum_payment: minimumPayment,
+      payment_frequency: paymentFrequency,
+      due_day: dueDay,
+      due_weekday: dueWeekday,
+    })
+    .eq("id", id)
+    .eq("household_id", household.householdId);
+
+  if (error) return { error: error.message };
 
   revalidateBudgetPaths();
+  return { success: true };
 }
 
 export async function deleteDebt(formData: FormData) {

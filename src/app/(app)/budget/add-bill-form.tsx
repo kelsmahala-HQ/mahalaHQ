@@ -36,14 +36,15 @@ export default function AddBillForm({ todayStr }: { todayStr: string }) {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     setError(null);
     setLoading(true);
 
-    const result = await addBill(new FormData(e.currentTarget));
+    const result = await addBill(new FormData(form));
 
     setLoading(false);
     if ("error" in result) setError(result.error);
-    else e.currentTarget.reset();
+    else form.reset();
   }
 
   return (

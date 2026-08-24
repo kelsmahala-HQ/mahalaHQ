@@ -39,15 +39,20 @@ type Debt = {
   due_weekday: number | null;
 };
 
-/** Mirrors a debt's minimum payment into Budget as a linked bill, if it has an amount + due day/weekday. */
-export async function syncDebtBill(supabase: SupabaseClient, householdId: string, debt: Debt) {
-  if (!debt.minimum_payment || (!debt.due_day && debt.due_weekday === null)) return;
+/** Mirrors a debt's minimum payment into Budget as a linked bill, if it has an amount + due day/weekday.
+ *  Returns `synced: false` (not an error) when the debt is missing what it needs to sync. */
+export async function syncDebtBill(
+  supabase: SupabaseClient,
+  householdId: string,
+  debt: Debt
+): Promise<{ synced: boolean }> {
+  if (!debt.minimum_payment || (!debt.due_day && debt.due_weekday === null)) return { synced: false };
 
   const now = new Date();
   const anchor =
     debt.payment_frequency === "monthly" ? nextMonthlyDate(debt.due_day!, now) : nextWeeklyDate(debt.due_weekday!, now);
 
-  await supabase.from("bills").insert({
+  const { error } = await supabase.from("bills").insert({
     household_id: householdId,
     name: `${debt.name} Payment`,
     type: "expense",
@@ -57,4 +62,7 @@ export async function syncDebtBill(supabase: SupabaseClient, householdId: string
     due_date: anchor,
     debt_id: debt.id,
   });
+
+  if (error) throw new Error(error.message);
+  return { synced: true };
 }

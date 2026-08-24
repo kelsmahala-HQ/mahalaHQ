@@ -7,16 +7,19 @@ export async function applyDebtPayment(
   amount: number,
   options?: { note?: string; paidOn?: string }
 ) {
-  await supabase.from("debt_payments").insert({
+  const { error: paymentError } = await supabase.from("debt_payments").insert({
     debt_id: debtId,
     amount,
     paid_on: options?.paidOn || new Date().toISOString().slice(0, 10),
     note: options?.note,
   });
+  if (paymentError) throw new Error(paymentError.message);
 
-  const { data: debt } = await supabase.from("debts").select("current_balance").eq("id", debtId).single();
+  const { data: debt, error: fetchError } = await supabase.from("debts").select("current_balance").eq("id", debtId).single();
+  if (fetchError) throw new Error(fetchError.message);
   if (debt) {
     const newBalance = Math.max(0, Number(debt.current_balance) - amount);
-    await supabase.from("debts").update({ current_balance: newBalance }).eq("id", debtId);
+    const { error: updateError } = await supabase.from("debts").update({ current_balance: newBalance }).eq("id", debtId);
+    if (updateError) throw new Error(updateError.message);
   }
 }

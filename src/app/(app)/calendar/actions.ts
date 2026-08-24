@@ -13,15 +13,22 @@ export async function addEvent(formData: FormData): Promise<{ error: string } | 
   const time = formData.get("time") as string;
   const allDay = !time;
   const startAt = allDay ? `${date}T00:00:00` : `${date}T${time}:00`;
-  const assignedTo = (formData.get("assigned_to") as string) || "";
+  const assignedMemberId = (formData.get("assigned_member_id") as string) || null;
   const recurrence = (formData.get("recurrence") as string) || "none";
   const recurrenceEnd = (formData.get("recurrence_end") as string) || null;
   const eventType = (formData.get("event_type") as string) || "general";
+
+  let assignedTo = "";
+  if (assignedMemberId) {
+    const { data: profile } = await supabase.from("family_profiles").select("member_name").eq("id", assignedMemberId).single();
+    assignedTo = profile?.member_name ?? "";
+  }
 
   const { error } = await supabase.from("calendar_events").insert({
     household_id: household.householdId,
     title: formData.get("title") as string,
     location: formData.get("location") as string,
+    assigned_member_id: assignedMemberId,
     assigned_to: assignedTo,
     start_at: startAt,
     all_day: allDay,
@@ -47,16 +54,23 @@ export async function updateEvent(formData: FormData): Promise<{ error: string }
   const time = formData.get("time") as string;
   const allDay = !time;
   const startAt = allDay ? `${date}T00:00:00` : `${date}T${time}:00`;
-  const assignedTo = (formData.get("assigned_to") as string) || "";
+  const assignedMemberId = (formData.get("assigned_member_id") as string) || null;
   const recurrence = (formData.get("recurrence") as string) || "none";
   const recurrenceEnd = (formData.get("recurrence_end") as string) || null;
   const eventType = (formData.get("event_type") as string) || "general";
+
+  let assignedTo = "";
+  if (assignedMemberId) {
+    const { data: profile } = await supabase.from("family_profiles").select("member_name").eq("id", assignedMemberId).single();
+    assignedTo = profile?.member_name ?? "";
+  }
 
   const { error } = await supabase
     .from("calendar_events")
     .update({
       title: formData.get("title") as string,
       location: formData.get("location") as string,
+      assigned_member_id: assignedMemberId,
       assigned_to: assignedTo,
       start_at: startAt,
       all_day: allDay,

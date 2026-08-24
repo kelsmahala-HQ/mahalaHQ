@@ -11,6 +11,7 @@ type EventData = {
   title: string;
   location: string | null;
   assigned_to: string | null;
+  assigned_member_id: string | null;
   start_at: string;
   anchorStartAt: string;
   all_day: boolean;
@@ -24,11 +25,12 @@ type EventData = {
 type Props = {
   event: EventData;
   icon: string;
+  members: { id: string; member_name: string }[];
   deleteEvent: (formData: FormData) => void;
   updateEvent: (formData: FormData) => Promise<{ error: string } | { success: true }>;
 };
 
-export default function EventPill({ event, icon, deleteEvent, updateEvent }: Props) {
+export default function EventPill({ event, icon, members, deleteEvent, updateEvent }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +87,14 @@ export default function EventPill({ event, icon, deleteEvent, updateEvent }: Pro
         {editing ? (
           <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
             <input name="title" required defaultValue={event.title} placeholder="Event title" className={`${inputClass} sm:col-span-2`} />
-            <input name="assigned_to" defaultValue={event.assigned_to ?? ""} placeholder="Who (optional)" className={inputClass} />
+            <select name="assigned_member_id" defaultValue={event.assigned_member_id ?? ""} className={inputClass}>
+              <option value="">Whole family</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.member_name}
+                </option>
+              ))}
+            </select>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">Date</label>
               <input name="date" type="date" required defaultValue={dateStr} className={inputClass} />
