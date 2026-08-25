@@ -446,6 +446,34 @@ create table if not exists plaid_items (
   created_at timestamptz not null default now()
 );
 
+-- One row per subscribed device/browser, for web push notifications. member_id is nullable so
+-- a subscription still works (and can be looked up by household) even if the member row is
+-- later deleted. Defined here (before the RLS section below) since the generic per-table policy
+-- loop needs this table to already exist.
+create table if not exists push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  member_id uuid references household_members(id) on delete set null,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Tracks which specific occurrence of a (possibly recurring) calendar event has already had
+-- its 1-day/2-hour reminder sent, since recurring events don't have a separate database row
+-- per occurrence. Written only by the scheduled Netlify function via the admin client -- no RLS
+-- policy is added below, so it's completely inaccessible via the anon/authenticated client
+-- (same intentional lockdown as plaid_items).
+create table if not exists calendar_event_reminders_sent (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references calendar_events(id) on delete cascade,
+  occurrence_start_at timestamptz not null,
+  reminder_type text not null check (reminder_type in ('1day', '2hr')),
+  sent_at timestamptz not null default now(),
+  unique (event_id, occurrence_start_at, reminder_type)
+);
+
 -- ============================================================================
 -- Row Level Security: every table is scoped to the caller's household(s)
 -- ============================================================================
@@ -477,6 +505,12 @@ alter table roundup_payouts enable row level security;
 -- completely inaccessible via the anon/authenticated client no matter what the app code
 -- does. It's only ever touched server-side via the secret-key admin client (src/lib/supabase/admin.ts).
 alter table plaid_items enable row level security;
+
+alter table push_subscriptions enable row level security;
+
+-- calendar_event_reminders_sent intentionally gets NO policies either -- same lockdown as
+-- plaid_items, since it's only ever touched by the scheduled Netlify function.
+alter table calendar_event_reminders_sent enable row level security;
 
 -- households: visible to members; any authenticated user may create one (onboarding)
 drop policy if exists households_select on households;
@@ -556,38 +590,3 @@ drop policy if exists avatars_storage_all on storage.objects;
 create policy avatars_storage_all on storage.objects for all
   using (bucket_id = 'avatars' and (storage.foldername(name))[1] in (select my_household_ids()::text))
   with check (bucket_id = 'avatars' and (storage.foldername(name))[1] in (select my_household_ids()::text));
-
--- ============================================================================
--- Web push notifications (calendar reminders, chore assignments)
--- ============================================================================
-
--- One row per subscribed device/browser. member_id is nullable so a subscription still works
--- (and can be looked up by household) even if the member row is later deleted.
-create table if not exists push_subscriptions (
-  id uuid primary key default gen_random_uuid(),
-  household_id uuid not null references households(id) on delete cascade,
-  member_id uuid references household_members(id) on delete set null,
-  endpoint text not null unique,
-  p256dh text not null,
-  auth text not null,
-  created_at timestamptz not null default now()
-);
-
-alter table push_subscriptions enable row level security;
--- (RLS policy for this table is added by the generic per-table loop above.)
-
--- Tracks which specific occurrence of a (possibly recurring) event has already had its 1-day/
--- 2-hour reminder sent, since recurring events don't have a separate database row per
--- occurrence. Written only by the scheduled Netlify function via the admin client -- no RLS
--- policy is added, so it's completely inaccessible via the anon/authenticated client (same
--- intentional lockdown as plaid_items above).
-create table if not exists calendar_event_reminders_sent (
-  id uuid primary key default gen_random_uuid(),
-  event_id uuid not null references calendar_events(id) on delete cascade,
-  occurrence_start_at timestamptz not null,
-  reminder_type text not null check (reminder_type in ('1day', '2hr')),
-  sent_at timestamptz not null default now(),
-  unique (event_id, occurrence_start_at, reminder_type)
-);
-
-alter table calendar_event_reminders_sent enable row level security;
