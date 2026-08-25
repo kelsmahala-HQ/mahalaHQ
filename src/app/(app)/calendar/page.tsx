@@ -154,28 +154,45 @@ export default async function CalendarPage({
           if (month) addParams.set("month", month);
           if (hide) addParams.set("hide", hide);
           addParams.set("add", key);
+          const dots: { className?: string; style?: React.CSSProperties; title: string }[] = [
+            ...dayBills.map((b) => ({ className: "bg-red-500", title: `💳 ${b.name} due` })),
+            ...dayChores.map((c) => ({ className: "bg-yellow-500", title: `🧹 ${c.title}` })),
+            ...dayExternal.map((ext) => ({ className: "bg-blue-500", title: ext.title })),
+            ...dayEvents.map((e) => ({ style: { backgroundColor: e.color }, title: e.title })),
+          ];
           return (
             <div
               key={key}
-              className={`min-h-24 p-1.5 ${isToday ? "bg-yellow-50" : "bg-white"} ${inMonth ? "" : "bg-slate-50 text-slate-300"}`}
+              className={`min-h-16 p-1.5 sm:min-h-24 ${isToday ? "bg-yellow-50" : "bg-white"} ${inMonth ? "" : "bg-slate-50 text-slate-300"}`}
             >
               <div className="mb-1 flex items-center justify-between">
                 <Link
                   href={`/calendar?${addParams.toString()}#add-event`}
                   title="Add something on this day"
-                  className="rounded px-1 text-xs font-bold leading-none text-slate-300 hover:bg-teal-50 hover:text-teal-600"
+                  className="rounded px-1.5 py-0.5 text-xs font-bold leading-none text-slate-300 hover:bg-teal-50 hover:text-teal-600"
                 >
                   +
                 </Link>
                 <Link
                   href={`/calendar/day?date=${key}`}
                   title="Open day view"
-                  className={`text-right text-xs hover:underline ${isToday ? "font-bold text-teal-600" : "text-slate-400"}`}
+                  className={`px-1 py-0.5 text-right text-xs hover:underline ${isToday ? "font-bold text-teal-600" : "text-slate-400"}`}
                 >
                   {format(day, "d")}
                 </Link>
               </div>
-              <div className="space-y-1">
+
+              {/* Mobile: compact dots instead of cramped text pills — tap the date above for full detail. */}
+              {!!dots.length && (
+                <div className="flex flex-wrap items-center gap-1 sm:hidden">
+                  {dots.slice(0, 6).map((d, i) => (
+                    <span key={i} title={d.title} className={`h-1.5 w-1.5 shrink-0 rounded-full ${d.className ?? ""}`} style={d.style} />
+                  ))}
+                  {dots.length > 6 && <span className="text-[10px] leading-none text-slate-400">+{dots.length - 6}</span>}
+                </div>
+              )}
+
+              <div className="hidden space-y-1 sm:block">
                 {dayBills.map((b) => (
                   <Link
                     key={b.key}
