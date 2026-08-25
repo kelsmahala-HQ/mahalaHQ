@@ -4,7 +4,7 @@ self.addEventListener("push", (event) => {
   const options = {
     body: payload.body || "",
     icon: "/icon",
-    badge: "/icon",
+    badge: "/badge-icon",
     data: { url: payload.url || "/dashboard" },
   };
   event.waitUntil(self.registration.showNotification(payload.title || "Mahala HQ", options));
