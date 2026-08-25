@@ -259,7 +259,7 @@ export default async function CalendarPage({
           <p className="mb-3 text-xs text-slate-500">
             In Google Calendar: <strong>Settings → your calendar → Integrate calendar</strong>, copy the{" "}
             <strong>Secret address in iCal format</strong>, and paste it below. Those events show up here in blue,
-            read-only — checked about once an hour. Only basic daily/weekly/monthly/yearly repeats are understood;
+            read-only — checked about every 10 minutes. Only basic daily/weekly/monthly/yearly repeats are understood;
             unusual custom repeats may not show every occurrence.
           </p>
           <GoogleImportForm currentUrl={household.googleCalendarUrl} action={updateGoogleCalendarUrl} />

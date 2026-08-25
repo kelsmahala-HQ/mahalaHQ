@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
+import { Card, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
 import { deleteRecipe } from "./actions";
-import AddRecipeForm from "./add-recipe-form";
+import RecipeFormPanel from "./recipe-form-panel";
 
 export default async function RecipesPage() {
   const household = await requireHousehold();
@@ -30,9 +30,7 @@ export default async function RecipesPage() {
         </Link>
       </div>
 
-      <CollapsibleCard title="Add a recipe" className="mb-8">
-        <AddRecipeForm />
-      </CollapsibleCard>
+      <RecipeFormPanel />
 
       {!recipes?.length ? (
         <EmptyState message="No recipes yet — add one above." />

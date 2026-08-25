@@ -164,7 +164,7 @@ export async function fetchExternalEvents(
   rangeEndExclusive: Date
 ): Promise<{ occurrences: ExternalOccurrence[]; error: string | null }> {
   try {
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const res = await fetch(url, { next: { revalidate: 600 } });
     if (!res.ok) return { occurrences: [], error: `Google Calendar returned an error (${res.status}).` };
     const text = await res.text();
     const events = parseIcsEvents(text);
