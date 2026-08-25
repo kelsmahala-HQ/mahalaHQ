@@ -20,6 +20,7 @@ import TaskList from "./task-list";
 import QuickAddHour from "./quick-add-hour";
 import HourHighlightControl from "./hour-highlight-control";
 import { deleteHighlight } from "./highlight-actions";
+import FilterBar, { parseHidden } from "../filter-bar";
 
 const HOUR_START = 6; // 6am
 const HOUR_END = 22; // 10pm row (last row covers 10-11pm)
@@ -37,9 +38,10 @@ function minutesOfDay(iso: string) {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-export default async function DayPlannerPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+export default async function DayPlannerPage({ searchParams }: { searchParams: Promise<{ date?: string; hide?: string }> }) {
   const household = await requireHousehold();
-  const { date } = await searchParams;
+  const { date, hide } = await searchParams;
+  const hidden = parseHidden(hide);
   const dayStr = date || format(new Date(), "yyyy-MM-dd");
   const dayStart = new Date(`${dayStr}T00:00:00`);
   const dayEndExclusive = addDays(dayStart, 1);
@@ -47,6 +49,12 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
   const supabase = await createClient();
   const canSeeMoney = household.role === "admin" || household.role === "adult";
   const isKid = household.role === "kid";
+
+  let assignedChoreIds: string[] | null = null;
+  if (isKid) {
+    const { data: assignedRows } = await supabase.from("chore_assignees").select("chore_id").eq("member_id", household.memberId);
+    assignedChoreIds = (assignedRows ?? []).map((r) => r.chore_id);
+  }
 
   const [{ data: events }, { data: debts }, { data: billsTable }, { data: chores }, { data: familyMembers }, { data: tasks }] = await Promise.all([
     supabase
@@ -66,15 +74,17 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
     canSeeMoney
       ? supabase.from("bills").select("name, frequency, due_date").eq("household_id", household.householdId)
       : Promise.resolve({ data: [] }),
-    (() => {
-      let query = supabase
-        .from("chores")
-        .select("id, title, assigned_to, assigned_member_id, due_date, status")
-        .eq("household_id", household.householdId)
-        .not("due_date", "is", null);
-      if (isKid) query = query.eq("assigned_member_id", household.memberId);
-      return query;
-    })(),
+    assignedChoreIds && !assignedChoreIds.length
+      ? Promise.resolve({ data: [] })
+      : (() => {
+          let query = supabase
+            .from("chores")
+            .select("id, title, assigned_to, due_date, status")
+            .eq("household_id", household.householdId)
+            .not("due_date", "is", null);
+          if (assignedChoreIds) query = query.in("id", assignedChoreIds);
+          return query;
+        })(),
     supabase.from("family_profiles").select("id, member_name").eq("household_id", household.householdId).order("member_name"),
     supabase
       .from("day_planner_tasks")
@@ -97,11 +107,12 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
   const occurrences = expandOccurrences((events ?? []) as CalendarEvent[], dayStart, dayEndExclusive);
   const bills = mergeBillMaps(billsDueByDay(debts ?? [], [dayStart]), billsTableDueByDay(billsTable ?? [], dayStart, dayEndExclusive));
   const choresByDay = choresDueByDay(chores ?? []);
-  const dayBills = bills.get(dayStr) ?? [];
-  const dayChores = choresByDay.get(dayStr) ?? [];
+  const dayBills = hidden.has("bills") ? [] : (bills.get(dayStr) ?? []);
+  const dayChores = hidden.has("chores") ? [] : (choresByDay.get(dayStr) ?? []);
 
-  const allDayEvents = occurrences.filter((e) => e.all_day);
-  const timedEvents = occurrences.filter((e) => !e.all_day);
+  const visibleOccurrences = occurrences.filter((e) => !hidden.has(e.event_type));
+  const allDayEvents = visibleOccurrences.filter((e) => e.all_day);
+  const timedEvents = visibleOccurrences.filter((e) => !e.all_day);
   const highlightedEvents = timedEvents.filter((e) => e.highlight_color);
 
   const hours: number[] = [];
@@ -159,6 +170,8 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Add to this day</h2>
         <AddEventForm todayStr={dayStr} members={members} />
       </Card>
+
+      <FilterBar basePath="/calendar/day" extraParams={{ date: dayStr }} hidden={hidden} />
 
       {(dayBills.length > 0 || dayChores.length > 0) && (
         <Card className="mb-6 !bg-amber-50">

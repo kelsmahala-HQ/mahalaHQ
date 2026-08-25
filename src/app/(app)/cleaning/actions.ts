@@ -30,30 +30,44 @@ function addInterval(date: Date, frequency: string): Date {
 export async function addCleaningTask(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
-  const assignedMemberId = (formData.get("assigned_member_id") as string) || null;
+  const assignedMemberIds = (formData.getAll("assigned_member_id") as string[]).filter(Boolean);
   const title = (formData.get("title") as string)?.trim();
   const frequency = formData.get("frequency") as string;
 
   if (!title) return { error: "Name the task." };
   if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(frequency)) return { error: "Pick a frequency." };
 
-  let assignedTo: string | null = null;
-  if (assignedMemberId) {
-    const { data: member } = await supabase.from("household_members").select("display_name").eq("id", assignedMemberId).maybeSingle();
-    assignedTo = member?.display_name ?? null;
+  let assignedNames: string[] = [];
+  if (assignedMemberIds.length) {
+    const { data: memberRows } = await supabase.from("household_members").select("id, display_name").in("id", assignedMemberIds);
+    assignedNames = assignedMemberIds
+      .map((id) => memberRows?.find((m) => m.id === id)?.display_name)
+      .filter((n): n is string => !!n);
   }
 
-  const { error } = await supabase.from("cleaning_tasks").insert({
-    household_id: household.householdId,
-    title,
-    frequency,
-    assigned_member_id: assignedMemberId,
-    assigned_to: assignedTo,
-    next_due_at: (formData.get("next_due_at") as string) || new Date().toISOString().slice(0, 10),
-    notes: (formData.get("notes") as string) || null,
-  });
+  const { data: task, error } = await supabase
+    .from("cleaning_tasks")
+    .insert({
+      household_id: household.householdId,
+      title,
+      frequency,
+      assigned_member_id: assignedMemberIds[0] ?? null,
+      assigned_to: assignedNames.join(", ") || null,
+      next_due_at: (formData.get("next_due_at") as string) || new Date().toISOString().slice(0, 10),
+      notes: (formData.get("notes") as string) || null,
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
+
+  if (assignedMemberIds.length) {
+    const { error: assigneeError } = await supabase
+      .from("cleaning_task_assignees")
+      .insert(assignedMemberIds.map((memberId) => ({ household_id: household.householdId, cleaning_task_id: task.id, member_id: memberId })));
+    if (assigneeError) return { error: assigneeError.message };
+  }
+
   revalidatePath("/cleaning");
   return { success: true };
 }
@@ -91,21 +105,38 @@ export async function syncCleaningTaskToChore(formData: FormData): Promise<{ err
   const cleaningTaskId = formData.get("cleaning_task_id") as string;
   const points = Number(formData.get("points") || 0);
 
-  const { data: task, error: fetchError } = await supabase.from("cleaning_tasks").select("*").eq("id", cleaningTaskId).single();
+  const [{ data: task, error: fetchError }, { data: taskAssignees }] = await Promise.all([
+    supabase.from("cleaning_tasks").select("*").eq("id", cleaningTaskId).single(),
+    supabase.from("cleaning_task_assignees").select("member_id").eq("cleaning_task_id", cleaningTaskId),
+  ]);
   if (fetchError || !task) return { error: fetchError?.message ?? "Task not found." };
 
-  const { error } = await supabase.from("chores").insert({
-    household_id: household.householdId,
-    title: task.title,
-    assigned_member_id: task.assigned_member_id,
-    assigned_to: task.assigned_to,
-    frequency: task.frequency,
-    points,
-    due_date: task.next_due_at,
-    cleaning_task_id: task.id,
-  });
+  const memberIds = taskAssignees?.length ? taskAssignees.map((a) => a.member_id) : task.assigned_member_id ? [task.assigned_member_id] : [];
+
+  const { data: chore, error } = await supabase
+    .from("chores")
+    .insert({
+      household_id: household.householdId,
+      title: task.title,
+      assigned_member_id: memberIds[0] ?? null,
+      assigned_to: task.assigned_to,
+      frequency: task.frequency,
+      points,
+      due_date: task.next_due_at,
+      cleaning_task_id: task.id,
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
+
+  if (memberIds.length) {
+    const { error: assigneeError } = await supabase
+      .from("chore_assignees")
+      .insert(memberIds.map((memberId) => ({ household_id: household.householdId, chore_id: chore.id, member_id: memberId })));
+    if (assigneeError) return { error: assigneeError.message };
+  }
+
   revalidatePath("/cleaning");
   revalidatePath("/chores");
   return { success: true };

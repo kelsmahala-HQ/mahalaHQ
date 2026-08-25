@@ -31,14 +31,17 @@ export default function AddCleaningTaskForm({ members }: { members: { id: string
         <option value="quarterly">Quarterly</option>
         <option value="yearly">Yearly</option>
       </select>
-      <select name="assigned_member_id" defaultValue="" className={inputClass}>
-        <option value="">Unassigned</option>
-        {members.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.display_name}
-          </option>
-        ))}
-      </select>
+      <div className="sm:col-span-2">
+        <label className="mb-1 block text-xs font-medium text-slate-500">Who (pick one or more, or leave unassigned)</label>
+        <div className="flex flex-wrap gap-3">
+          {members.map((m) => (
+            <label key={m.id} className="flex items-center gap-1.5 text-sm text-slate-700">
+              <input type="checkbox" name="assigned_member_id" value={m.id} className="accent-teal-600" />
+              {m.display_name}
+            </label>
+          ))}
+        </div>
+      </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-slate-500">First due (optional, defaults to today)</label>
         <input name="next_due_at" type="date" className={inputClass} />

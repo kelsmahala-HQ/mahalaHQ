@@ -12,18 +12,29 @@ export default async function ChoresPage() {
   const isKid = household.role === "kid";
   const canManage = household.role === "admin" || household.role === "adult";
 
+  // For a kid, resolve which chores they're assigned to first (a plain lookup, not an embedded
+  // join in the select string -- Supabase's typed select-string parser chokes on a computed
+  // "!inner" embed passed conditionally), then filter the main chores query with .in().
+  let assignedChoreIds: string[] | null = null;
+  if (isKid) {
+    const { data: assignedRows } = await supabase.from("chore_assignees").select("chore_id").eq("member_id", household.memberId);
+    assignedChoreIds = (assignedRows ?? []).map((r) => r.chore_id);
+  }
+
   const [{ data: members }, choresQuery, { data: rewards }, { data: pendingRedemptions }] = await Promise.all([
     supabase.from("household_members").select("id, display_name").eq("household_id", household.householdId).order("display_name"),
-    (() => {
-      let query = supabase
-        .from("chores")
-        .select("*")
-        .eq("household_id", household.householdId)
-        .order("status")
-        .order("due_date", { nullsFirst: false });
-      if (isKid) query = query.eq("assigned_member_id", household.memberId);
-      return query;
-    })(),
+    assignedChoreIds && !assignedChoreIds.length
+      ? Promise.resolve({ data: [] })
+      : (() => {
+          let query = supabase
+            .from("chores")
+            .select("*")
+            .eq("household_id", household.householdId)
+            .order("status")
+            .order("due_date", { nullsFirst: false });
+          if (assignedChoreIds) query = query.in("id", assignedChoreIds);
+          return query;
+        })(),
     canManage ? supabase.from("rewards").select("*").eq("household_id", household.householdId).order("cost") : Promise.resolve({ data: [] }),
     canManage
       ? supabase

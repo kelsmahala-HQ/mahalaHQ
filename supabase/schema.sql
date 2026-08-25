@@ -200,6 +200,24 @@ begin
     check (frequency in ('once', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'));
 end $$;
 
+-- Lets a chore be assigned to more than one person (e.g. a two-person job). assigned_member_id/
+-- assigned_to above stay populated too (first assignee / comma-joined names) for anything that
+-- hasn't been updated to read this table -- this is the source of truth going forward.
+create table if not exists chore_assignees (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  chore_id uuid not null references chores(id) on delete cascade,
+  member_id uuid not null references household_members(id) on delete cascade,
+  unique (chore_id, member_id)
+);
+
+-- Backfills existing chores' single assignee into the new table -- without this, a kid-visible
+-- chore assigned before this migration would vanish from that kid's list (the page now filters
+-- via an inner join on this table). Safe to re-run.
+insert into chore_assignees (household_id, chore_id, member_id)
+select household_id, id, assigned_member_id from chores where assigned_member_id is not null
+on conflict (chore_id, member_id) do nothing;
+
 -- Durable log of completed chores and the points they earned -- chores.status flips back to
 -- 'open' immediately for recurring chores, so it can't be used to total up points earned.
 create table if not exists chore_completions (
@@ -268,6 +286,20 @@ create table if not exists cleaning_tasks (
   notes text,
   created_at timestamptz not null default now()
 );
+
+-- Same multi-assignee support as chore_assignees, for the same reason (a two-person job).
+create table if not exists cleaning_task_assignees (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  cleaning_task_id uuid not null references cleaning_tasks(id) on delete cascade,
+  member_id uuid not null references household_members(id) on delete cascade,
+  unique (cleaning_task_id, member_id)
+);
+
+-- Same backfill reasoning as chore_assignees above. Safe to re-run.
+insert into cleaning_task_assignees (household_id, cleaning_task_id, member_id)
+select household_id, id, assigned_member_id from cleaning_tasks where assigned_member_id is not null
+on conflict (cleaning_task_id, member_id) do nothing;
 
 -- Links a chore back to the Cleaning Schedule task it was created from (if any), so the
 -- Cleaning page can show "already added" instead of letting it be synced twice.
@@ -655,7 +687,8 @@ declare
     'maintenance_tasks', 'grocery_items', 'documents',
     'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
     'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks',
-    'day_planner_highlights', 'cleaning_tasks', 'recipes', 'recipe_ingredients', 'meal_plan_entries'
+    'day_planner_highlights', 'cleaning_tasks', 'recipes', 'recipe_ingredients', 'meal_plan_entries',
+    'chore_assignees', 'cleaning_task_assignees'
   ];
 begin
   foreach t in array tables loop

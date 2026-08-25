@@ -24,14 +24,17 @@ export default function AddChoreForm({ members }: { members: { id: string; displ
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <input name="title" required placeholder="Chore (e.g. Take out trash)" className={inputClass} />
-      <select name="assigned_member_id" className={inputClass} defaultValue="">
-        <option value="">Unassigned</option>
-        {members?.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.display_name}
-          </option>
-        ))}
-      </select>
+      <div className="sm:col-span-2">
+        <label className="mb-1 block text-xs font-medium text-slate-500">Who (pick one or more, or leave unassigned)</label>
+        <div className="flex flex-wrap gap-3">
+          {members?.map((m) => (
+            <label key={m.id} className="flex items-center gap-1.5 text-sm text-slate-700">
+              <input type="checkbox" name="assigned_member_id" value={m.id} className="accent-teal-600" />
+              {m.display_name}
+            </label>
+          ))}
+        </div>
+      </div>
       <select name="frequency" className={inputClass} defaultValue="weekly">
         <option value="once">One-time</option>
         <option value="daily">Daily</option>

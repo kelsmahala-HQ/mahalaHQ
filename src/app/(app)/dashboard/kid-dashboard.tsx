@@ -8,14 +8,19 @@ import RedeemButton from "../chores/redeem-button";
 export default async function KidDashboard({ household }: { household: CurrentHousehold }) {
   const supabase = await createClient();
 
+  const { data: assignedRows } = await supabase.from("chore_assignees").select("chore_id").eq("member_id", household.memberId);
+  const assignedChoreIds = (assignedRows ?? []).map((r) => r.chore_id);
+
   const [{ data: chores }, { data: completions }, { data: rewards }, { data: redemptions }] = await Promise.all([
-    supabase
-      .from("chores")
-      .select("*")
-      .eq("household_id", household.householdId)
-      .eq("assigned_member_id", household.memberId)
-      .order("status")
-      .order("due_date", { nullsFirst: false }),
+    assignedChoreIds.length
+      ? supabase
+          .from("chores")
+          .select("*")
+          .eq("household_id", household.householdId)
+          .in("id", assignedChoreIds)
+          .order("status")
+          .order("due_date", { nullsFirst: false })
+      : Promise.resolve({ data: [] }),
     supabase.from("chore_completions").select("points").eq("member_id", household.memberId),
     supabase.from("rewards").select("*").eq("household_id", household.householdId).order("cost"),
     supabase.from("reward_redemptions").select("*").eq("member_id", household.memberId).order("requested_at", { ascending: false }),

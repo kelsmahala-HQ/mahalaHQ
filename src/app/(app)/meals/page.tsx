@@ -6,6 +6,7 @@ import { requireHousehold } from "@/lib/household";
 import { PageHeader } from "@/components/ui";
 import { deleteMealPlanEntry } from "./actions";
 import AddMealEntry from "./add-meal-entry";
+import AddWeekToGroceriesButton from "./add-week-to-groceries-button";
 
 const MEAL_TYPES = [
   { value: "breakfast", label: "Breakfast" },
@@ -46,7 +47,7 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <PageHeader title="Meal Planner" subtitle="Plan the week — adding a recipe automatically adds its ingredients to Groceries." />
+      <PageHeader title="Meal Planner" subtitle="Plan the week, then pull the whole week's ingredients into Groceries when you're ready to shop." />
 
       <div className="mb-6 flex items-center justify-between">
         <Link href={`/meals?week=${prevWeek}`} className="text-sm font-medium text-slate-500 hover:text-teal-600">
@@ -93,6 +94,10 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
             </Fragment>
           ))}
         </div>
+      </div>
+
+      <div className="mt-6">
+        <AddWeekToGroceriesButton weekStart={weekStartStr} weekEnd={weekEndStr} />
       </div>
     </div>
   );

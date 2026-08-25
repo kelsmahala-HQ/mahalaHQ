@@ -18,14 +18,16 @@ import {
   expandOccurrences,
   mergeBillMaps,
 } from "@/lib/calendar-agenda";
+import FilterBar, { parseHidden } from "./filter-bar";
 
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; hide?: string }>;
 }) {
   const household = await requireHousehold();
-  const { month } = await searchParams;
+  const { month, hide } = await searchParams;
+  const hidden = parseHidden(hide);
   const anchor = month ? new Date(`${month}-01T00:00:00`) : new Date();
 
   const monthStart = startOfMonth(anchor);
@@ -121,6 +123,8 @@ export default async function CalendarPage({
         </Link>
       </div>
 
+      <FilterBar basePath="/calendar" extraParams={month ? { month } : {}} hidden={hidden} />
+
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 text-xs">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <div key={d} className="bg-slate-50 p-2 text-center font-medium text-slate-500">
@@ -129,10 +133,10 @@ export default async function CalendarPage({
         ))}
         {days.map((day) => {
           const key = format(day, "yyyy-MM-dd");
-          const dayEvents = eventsByDay.get(key) ?? [];
-          const dayBills = bills.get(key) ?? [];
-          const dayChores = choresByDay.get(key) ?? [];
-          const dayExternal = externalByDay.get(key) ?? [];
+          const dayEvents = (eventsByDay.get(key) ?? []).filter((e) => !hidden.has(e.event_type));
+          const dayBills = hidden.has("bills") ? [] : (bills.get(key) ?? []);
+          const dayChores = hidden.has("chores") ? [] : (choresByDay.get(key) ?? []);
+          const dayExternal = hidden.has("external") ? [] : (externalByDay.get(key) ?? []);
           const inMonth = day.getMonth() === monthStart.getMonth();
           const isToday = key === todayStr;
           return (

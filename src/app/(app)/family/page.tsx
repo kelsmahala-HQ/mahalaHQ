@@ -5,16 +5,32 @@ import { getAvatarUrl } from "./actions";
 import ProfileCard from "./profile-card";
 import AddProfileForm from "./add-profile-form";
 
+function calculateAge(dob: string | null): number | null {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
 export default async function FamilyPage() {
   const household = await requireCaregiver();
+  const isSitter = household.role === "sitter";
   const supabase = await createClient();
   const [{ data: profiles }, { data: members }] = await Promise.all([
     supabase.from("family_profiles").select("*").eq("household_id", household.householdId).order("member_name"),
     supabase.from("household_members").select("id, display_name").eq("household_id", household.householdId).order("display_name"),
   ]);
 
+  // Sitters only need the kids' info (doctor, allergies, schedule, etc.) -- an adult family
+  // member's own profile isn't something a sitter has a reason to see. Filtered here, before
+  // it's ever sent to the client, not just hidden in the UI.
+  const visibleProfiles = isSitter ? (profiles ?? []).filter((p) => { const age = calculateAge(p.date_of_birth); return age === null || age < 18; }) : (profiles ?? []);
+
   const profilesWithAvatars = await Promise.all(
-    (profiles ?? []).map(async (p) => ({
+    visibleProfiles.map(async (p) => ({
       ...p,
       avatarUrl: p.avatar_path ? await getAvatarUrl(p.avatar_path) : null,
     }))

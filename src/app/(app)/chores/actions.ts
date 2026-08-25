@@ -8,38 +8,47 @@ import { sendPushToMember } from "@/lib/push";
 export async function addChore(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
-  const assignedMemberId = (formData.get("assigned_member_id") as string) || null;
+  const assignedMemberIds = (formData.getAll("assigned_member_id") as string[]).filter(Boolean);
 
-  let assignedTo: string | null = null;
-  if (assignedMemberId) {
-    const { data: member } = await supabase
-      .from("household_members")
-      .select("display_name")
-      .eq("id", assignedMemberId)
-      .maybeSingle();
-    assignedTo = member?.display_name ?? null;
+  let assignedNames: string[] = [];
+  if (assignedMemberIds.length) {
+    const { data: memberRows } = await supabase.from("household_members").select("id, display_name").in("id", assignedMemberIds);
+    assignedNames = assignedMemberIds
+      .map((id) => memberRows?.find((m) => m.id === id)?.display_name)
+      .filter((n): n is string => !!n);
   }
 
   const title = formData.get("title") as string;
 
-  const { error } = await supabase.from("chores").insert({
-    household_id: household.householdId,
-    title,
-    assigned_member_id: assignedMemberId,
-    assigned_to: assignedTo,
-    frequency: (formData.get("frequency") as string) || "once",
-    points: Number(formData.get("points") || 0),
-    due_date: (formData.get("due_date") as string) || null,
-  });
+  const { data: chore, error } = await supabase
+    .from("chores")
+    .insert({
+      household_id: household.householdId,
+      title,
+      assigned_member_id: assignedMemberIds[0] ?? null,
+      assigned_to: assignedNames.join(", ") || null,
+      frequency: (formData.get("frequency") as string) || "once",
+      points: Number(formData.get("points") || 0),
+      due_date: (formData.get("due_date") as string) || null,
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
 
-  if (assignedMemberId) {
-    await sendPushToMember(supabase, assignedMemberId, {
-      title: "🧹 New chore assigned",
-      body: title,
-      url: "/chores",
-    });
+  if (assignedMemberIds.length) {
+    const { error: assigneeError } = await supabase
+      .from("chore_assignees")
+      .insert(assignedMemberIds.map((memberId) => ({ household_id: household.householdId, chore_id: chore.id, member_id: memberId })));
+    if (assigneeError) return { error: assigneeError.message };
+
+    for (const memberId of assignedMemberIds) {
+      await sendPushToMember(supabase, memberId, {
+        title: "🧹 New chore assigned",
+        body: title,
+        url: "/chores",
+      });
+    }
   }
 
   revalidatePath("/chores");
@@ -99,15 +108,23 @@ export async function completeChore(formData: FormData) {
   }
 
   // Logged separately from chores.status since recurring chores don't stay "done" -- this is
-  // the durable record used to total up points earned for the rewards balance.
-  if (chore.points > 0 && chore.assigned_member_id) {
-    const { error } = await supabase.from("chore_completions").insert({
-      household_id: household.householdId,
-      chore_id: chore.id,
-      member_id: chore.assigned_member_id,
-      points: chore.points,
-    });
-    if (error) throw new Error(error.message);
+  // the durable record used to total up points earned for the rewards balance. Every assignee
+  // on a shared chore gets full credit, not a split -- "you both did it" is worth crediting both.
+  if (chore.points > 0) {
+    const { data: assignees } = await supabase.from("chore_assignees").select("member_id").eq("chore_id", chore.id);
+    const memberIds = assignees?.length ? assignees.map((a) => a.member_id) : chore.assigned_member_id ? [chore.assigned_member_id] : [];
+
+    if (memberIds.length) {
+      const { error } = await supabase.from("chore_completions").insert(
+        memberIds.map((memberId) => ({
+          household_id: household.householdId,
+          chore_id: chore.id,
+          member_id: memberId,
+          points: chore.points,
+        }))
+      );
+      if (error) throw new Error(error.message);
+    }
   }
 
   revalidatePath("/chores");
