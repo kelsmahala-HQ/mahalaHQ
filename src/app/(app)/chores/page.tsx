@@ -101,6 +101,7 @@ export default async function ChoresPage() {
                     !isKid ? chore.assigned_to : null,
                     chore.frequency !== "once" ? chore.frequency : null,
                     chore.due_date ? `due ${chore.due_date}` : null,
+                    chore.last_completed_at ? `last done ${new Date(chore.last_completed_at).toLocaleDateString()}` : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}

@@ -188,6 +188,18 @@ create table if not exists chores (
 -- Adds assigned_member_id to chores for installs that ran an earlier version of this script.
 alter table chores add column if not exists assigned_member_id uuid references household_members(id) on delete set null;
 
+-- Widens frequency to quarterly/yearly and links back to the Cleaning Schedule task this chore
+-- was created from (if any) -- drop+recreate so installs that already have this constraint
+-- still pick up the expanded value list.
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'chores_frequency_check') then
+    alter table chores drop constraint chores_frequency_check;
+  end if;
+  alter table chores add constraint chores_frequency_check
+    check (frequency in ('once', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'));
+end $$;
+
 -- Durable log of completed chores and the points they earned -- chores.status flips back to
 -- 'open' immediately for recurring chores, so it can't be used to total up points earned.
 create table if not exists chore_completions (
@@ -236,6 +248,64 @@ create table if not exists maintenance_tasks (
   last_done_at date,
   next_due_at date,
   notes text,
+  created_at timestamptz not null default now()
+);
+
+-- ============================================================================
+-- Cleaning schedule -- like Maintenance, but tiered to fixed named frequencies
+-- (daily/weekly/monthly/quarterly/yearly) instead of an arbitrary day count.
+-- ============================================================================
+
+create table if not exists cleaning_tasks (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  title text not null,
+  frequency text not null check (frequency in ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')),
+  assigned_to text,
+  assigned_member_id uuid references household_members(id) on delete set null,
+  last_done_at date,
+  next_due_at date,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+-- Links a chore back to the Cleaning Schedule task it was created from (if any), so the
+-- Cleaning page can show "already added" instead of letting it be synced twice.
+alter table chores add column if not exists cleaning_task_id uuid references cleaning_tasks(id) on delete cascade;
+
+-- ============================================================================
+-- Recipes & meal planner
+-- ============================================================================
+
+create table if not exists recipes (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  name text not null,
+  instructions text,
+  servings integer,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists recipe_ingredients (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  recipe_id uuid not null references recipes(id) on delete cascade,
+  name text not null,
+  quantity text, -- free text e.g. "2 cups", "1 lb"
+  position integer not null default 0
+);
+
+-- One row per meal slot per day. recipe_id is null for a free-typed meal (no recipe on file);
+-- title is always populated (denormalized from the recipe, or typed directly) so the weekly
+-- grid never needs a join just to show what's planned.
+create table if not exists meal_plan_entries (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  date date not null,
+  meal_type text not null check (meal_type in ('breakfast', 'lunch', 'dinner', 'snack')),
+  recipe_id uuid references recipes(id) on delete set null,
+  title text not null,
   created_at timestamptz not null default now()
 );
 
@@ -585,7 +655,7 @@ declare
     'maintenance_tasks', 'grocery_items', 'documents',
     'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
     'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks',
-    'day_planner_highlights'
+    'day_planner_highlights', 'cleaning_tasks', 'recipes', 'recipe_ingredients', 'meal_plan_entries'
   ];
 begin
   foreach t in array tables loop
