@@ -36,11 +36,26 @@ export async function exchangePublicToken(
 
   try {
     const response = await client.itemPublicTokenExchange({ public_token: publicToken });
+    const accessToken = response.data.access_token;
+
+    // Plaid's first sync on a freshly-linked item returns the account's entire transaction
+    // history, not just what happens from here on. Fast-forward through that initial batch
+    // without recording any of it as a round-up purchase, so Round-Up only starts counting
+    // transactions from today forward -- not everything the account has ever done.
+    let cursor: string | undefined;
+    let hasMore = true;
+    while (hasMore) {
+      const syncResponse = await client.transactionsSync({ access_token: accessToken, cursor });
+      cursor = syncResponse.data.next_cursor;
+      hasMore = syncResponse.data.has_more;
+    }
+
     await admin.from("plaid_items").insert({
       household_id: household.householdId,
       item_id: response.data.item_id,
-      access_token: response.data.access_token,
+      access_token: accessToken,
       institution_name: institutionName,
+      cursor,
     });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not link account." };
