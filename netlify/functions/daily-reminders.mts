@@ -106,11 +106,11 @@ async function dailyReminders() {
       ${choreItems ? `<p><strong>Chores</strong></p><ul>${choreItems}</ul>` : ""}
       ${maintenanceItems ? `<p><strong>Maintenance</strong></p><ul>${maintenanceItems}</ul>` : ""}
       ${billItems ? `<p><strong>Bills due today</strong></p><ul>${billItems}</ul>` : ""}
-      <p><a href="${siteUrl}/chores">Open Family Portal</a></p>
+      <p><a href="${siteUrl}/chores">Open Mahala HQ</a></p>
     `;
 
     await resend.emails.send({
-      from: "Family Portal <invites@mahalahq.org>",
+      from: "Mahala HQ <invites@mahalahq.org>",
       to: emails,
       subject: `📋 ${household.name}: things due today`,
       html,

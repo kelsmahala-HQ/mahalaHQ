@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
+import { sendPushToMember } from "@/lib/push";
 
 export async function addChore(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
@@ -19,9 +20,11 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
     assignedTo = member?.display_name ?? null;
   }
 
+  const title = formData.get("title") as string;
+
   const { error } = await supabase.from("chores").insert({
     household_id: household.householdId,
-    title: formData.get("title") as string,
+    title,
     assigned_member_id: assignedMemberId,
     assigned_to: assignedTo,
     frequency: (formData.get("frequency") as string) || "once",
@@ -30,6 +33,14 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
   });
 
   if (error) return { error: error.message };
+
+  if (assignedMemberId) {
+    await sendPushToMember(supabase, assignedMemberId, {
+      title: "🧹 New chore assigned",
+      body: title,
+      url: "/chores",
+    });
+  }
 
   revalidatePath("/chores");
   return { success: true };

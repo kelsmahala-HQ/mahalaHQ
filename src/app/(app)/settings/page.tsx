@@ -3,6 +3,7 @@ import { requireAdult } from "@/lib/household";
 import { Card, PageHeader, inputClass } from "@/components/ui";
 import { updateMemberPhone, updateMemberRole } from "./actions";
 import InviteEmailForm from "./invite-email-form";
+import PushToggle from "./push-toggle";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -27,6 +28,15 @@ export default async function SettingsPage() {
         title="Household Members"
         subtitle="Kid accounts only see Chores, Calendar, and Groceries. Sitter accounts only see Family Info, Emergency Contacts, and the Calendar — no financial or household-management pages."
       />
+
+      <Card className="mb-8">
+        <h2 className="mb-3 text-sm font-semibold text-slate-700">🔔 Notifications</h2>
+        <p className="mb-3 text-sm text-slate-500">
+          Get an alert on this device for calendar reminders (a day before and 2 hours before) and when a chore is
+          assigned to you. This has to be turned on separately on each device/browser you use.
+        </p>
+        <PushToggle />
+      </Card>
 
       <Card className="mb-8">
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Invite a family member</h2>

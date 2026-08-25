@@ -513,7 +513,7 @@ declare
     'chore_completions', 'rewards', 'reward_redemptions',
     'maintenance_tasks', 'grocery_items', 'documents',
     'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
-    'roundup_settings', 'roundup_purchases', 'roundup_payouts'
+    'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions'
   ];
 begin
   foreach t in array tables loop
@@ -556,3 +556,38 @@ drop policy if exists avatars_storage_all on storage.objects;
 create policy avatars_storage_all on storage.objects for all
   using (bucket_id = 'avatars' and (storage.foldername(name))[1] in (select my_household_ids()::text))
   with check (bucket_id = 'avatars' and (storage.foldername(name))[1] in (select my_household_ids()::text));
+
+-- ============================================================================
+-- Web push notifications (calendar reminders, chore assignments)
+-- ============================================================================
+
+-- One row per subscribed device/browser. member_id is nullable so a subscription still works
+-- (and can be looked up by household) even if the member row is later deleted.
+create table if not exists push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  member_id uuid references household_members(id) on delete set null,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table push_subscriptions enable row level security;
+-- (RLS policy for this table is added by the generic per-table loop above.)
+
+-- Tracks which specific occurrence of a (possibly recurring) event has already had its 1-day/
+-- 2-hour reminder sent, since recurring events don't have a separate database row per
+-- occurrence. Written only by the scheduled Netlify function via the admin client -- no RLS
+-- policy is added, so it's completely inaccessible via the anon/authenticated client (same
+-- intentional lockdown as plaid_items above).
+create table if not exists calendar_event_reminders_sent (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references calendar_events(id) on delete cascade,
+  occurrence_start_at timestamptz not null,
+  reminder_type text not null check (reminder_type in ('1day', '2hr')),
+  sent_at timestamptz not null default now(),
+  unique (event_id, occurrence_start_at, reminder_type)
+);
+
+alter table calendar_event_reminders_sent enable row level security;

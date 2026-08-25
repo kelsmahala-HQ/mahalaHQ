@@ -72,3 +72,33 @@ export async function sendInviteEmail(formData: FormData): Promise<{ error: stri
   revalidatePath("/settings");
   return { success: true };
 }
+
+export async function subscribePush(subscription: {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+}): Promise<{ error: string } | { success: true }> {
+  const household = await requireHousehold();
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    {
+      household_id: household.householdId,
+      member_id: household.memberId,
+      endpoint: subscription.endpoint,
+      p256dh: subscription.keys.p256dh,
+      auth: subscription.keys.auth,
+    },
+    { onConflict: "endpoint" }
+  );
+
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
+export async function unsubscribePush(endpoint: string): Promise<{ error: string } | { success: true }> {
+  await requireHousehold();
+  const supabase = await createClient();
+  const { error } = await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+  if (error) return { error: error.message };
+  return { success: true };
+}
