@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
-import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
+import { Card, CollapsibleCard, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { addTask, deleteTask, markDone } from "./actions";
 
 export default async function MaintenancePage() {
@@ -18,8 +18,7 @@ export default async function MaintenancePage() {
     <div>
       <PageHeader title="House Maintenance" subtitle="Recurring upkeep — filters, gutters, HVAC, and more." />
 
-      <Card className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a task</h2>
+      <CollapsibleCard title="Add a task" className="mb-8">
         <form action={addTask} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input name="title" required placeholder="Task (e.g. Replace HVAC filter)" className={inputClass} />
           <input name="category" placeholder="Category (e.g. HVAC)" className={inputClass} />
@@ -36,7 +35,7 @@ export default async function MaintenancePage() {
             Add task
           </button>
         </form>
-      </Card>
+      </CollapsibleCard>
 
       {!tasks?.length ? (
         <EmptyState message="No maintenance tasks yet — add one above." />

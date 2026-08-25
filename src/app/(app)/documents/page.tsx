@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
-import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
+import { Card, CollapsibleCard, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { deleteDocument, getDownloadUrl, uploadDocument } from "./actions";
 
 export default async function DocumentsPage() {
@@ -20,8 +20,7 @@ export default async function DocumentsPage() {
     <div>
       <PageHeader title="Documents" subtitle="Insurance cards, warranties, IDs, and other household files." />
 
-      <Card className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Upload a document</h2>
+      <CollapsibleCard title="Upload a document" className="mb-8">
         <form action={uploadDocument} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input name="title" placeholder="Title (defaults to filename)" className={inputClass} />
           <input name="category" placeholder="Category (e.g. Insurance)" className={inputClass} />
@@ -32,7 +31,7 @@ export default async function DocumentsPage() {
             Upload
           </button>
         </form>
-      </Card>
+      </CollapsibleCard>
 
       {!withUrls.length ? (
         <EmptyState message="No documents uploaded yet." />

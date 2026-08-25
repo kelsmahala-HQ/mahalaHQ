@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { Card, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
+import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
 import { completeChore, deleteChore } from "./actions";
 import { approveRedemption, denyRedemption, deleteReward } from "./rewards-actions";
 import AddChoreForm from "./add-chore-form";
@@ -56,10 +56,9 @@ export default async function ChoresPage() {
       />
 
       {canManage && (
-        <Card className="mb-8">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a chore</h2>
+        <CollapsibleCard title="Add a chore" className="mb-8">
           <AddChoreForm members={members ?? []} />
-        </Card>
+        </CollapsibleCard>
       )}
 
       {canManage && !!pendingRedemptions?.length && (

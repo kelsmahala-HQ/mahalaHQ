@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
 import AddDebtForm from "./add-debt-form";
 import DebtRow from "./debt-row";
 
@@ -53,10 +53,9 @@ export default async function DebtsPage() {
         </Card>
       </div>
 
-      <Card className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a debt</h2>
+      <CollapsibleCard title="Add a debt" className="mb-8">
         <AddDebtForm />
-      </Card>
+      </CollapsibleCard>
 
       {!debts?.length ? (
         <EmptyState message="No debts tracked yet — add one above." />

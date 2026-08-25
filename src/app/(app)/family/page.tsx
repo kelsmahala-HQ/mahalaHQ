@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireCaregiver } from "@/lib/household";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
 import { getAvatarUrl } from "./actions";
 import ProfileCard from "./profile-card";
 import AddProfileForm from "./add-profile-form";
@@ -46,10 +46,9 @@ export default async function FamilyPage() {
         subtitle="School, doctor, schedules, clothing sizes — everything about each family member in one place."
       />
 
-      <Card className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a family member</h2>
+      <CollapsibleCard title="Add a family member" className="mb-8">
         <AddProfileForm members={members ?? []} />
-      </Card>
+      </CollapsibleCard>
 
       {!profilesWithAvatars.length ? (
         <EmptyState message="No family members yet — add one above, then fill in details." />

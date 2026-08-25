@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { Card, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
+import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
 import { deleteCleaningTask, markCleaningTaskDone } from "./actions";
 import AddCleaningTaskForm from "./add-cleaning-task-form";
 import SyncToChoreForm from "./sync-to-chore-form";
@@ -35,10 +35,9 @@ export default async function CleaningPage() {
     <div>
       <PageHeader title="Cleaning Schedule" subtitle="Recurring cleaning tasks, grouped by how often they need doing." />
 
-      <Card className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a task</h2>
+      <CollapsibleCard title="Add a task" className="mb-8">
         <AddCleaningTaskForm members={members ?? []} />
-      </Card>
+      </CollapsibleCard>
 
       {!tasks?.length ? (
         <EmptyState message="No cleaning tasks yet — add one above." />

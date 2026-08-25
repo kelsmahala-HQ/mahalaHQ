@@ -2,7 +2,7 @@ import Link from "next/link";
 import { addDays, format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { Card, PageHeader } from "@/components/ui";
+import { Card, CollapsibleCard, PageHeader } from "@/components/ui";
 import { deleteEvent, updateEvent } from "../actions";
 import EventPill from "../event-pill";
 import AddEventForm from "../add-event-form";
@@ -166,10 +166,9 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
         </Link>
       </div>
 
-      <Card className="mb-6">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add to this day</h2>
+      <CollapsibleCard title="Add to this day" className="mb-6">
         <AddEventForm todayStr={dayStr} members={members} />
-      </Card>
+      </CollapsibleCard>
 
       <FilterBar basePath="/calendar/day" extraParams={{ date: dayStr }} hidden={hidden} />
 

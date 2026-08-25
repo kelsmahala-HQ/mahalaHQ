@@ -15,6 +15,28 @@ export function Card({ children, className = "" }: { children: React.ReactNode; 
   );
 }
 
+export function CollapsibleCard({
+  title,
+  defaultOpen = false,
+  className = "",
+  children,
+}: {
+  title: React.ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className={`group rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>
+      <summary className="flex cursor-pointer list-none items-center justify-between p-5 text-sm font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
+        {title}
+        <span className="ml-2 text-slate-400 transition-transform group-open:rotate-90">▸</span>
+      </summary>
+      <div className="px-5 pb-5">{children}</div>
+    </details>
+  );
+}
+
 export function EmptyState({ message }: { message: string }) {
   return (
     <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-400">

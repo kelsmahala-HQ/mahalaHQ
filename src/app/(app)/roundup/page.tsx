@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdult } from "@/lib/household";
-import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
+import { Card, CollapsibleCard, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { calculateRoundUp } from "@/lib/roundup";
 import { addPurchase, sendPayout, updateSettings } from "./actions";
 import { removePlaidItem, syncTransactions } from "./plaid-actions";
@@ -125,8 +125,7 @@ export default async function RoundupPage() {
       </Card>
 
       <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Log a purchase manually</h2>
+        <CollapsibleCard title="Log a purchase manually">
           <form action={addPurchase} className="grid grid-cols-1 gap-3">
             <input name="amount" type="number" step="0.01" min="0.01" required placeholder="Purchase amount" className={inputClass} />
             <button type="submit" className={buttonClass}>
@@ -136,7 +135,7 @@ export default async function RoundupPage() {
           <p className="mt-2 text-xs text-slate-400">
             Rounds up to the next dollar × {multiplier}. e.g. a {currency(4.3)} purchase adds {currency(calculateRoundUp(4.3, multiplier))}.
           </p>
-        </Card>
+        </CollapsibleCard>
 
         <Card>
           <h2 className="mb-3 text-sm font-semibold text-slate-700">Settings</h2>

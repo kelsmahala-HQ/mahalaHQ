@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,8 +16,12 @@ export type CurrentHousehold = {
   userId: string;
 };
 
-/** Loads the signed-in user's household context, or sends them to onboarding/login. */
-export async function requireHousehold(): Promise<CurrentHousehold> {
+/**
+ * Loads the signed-in user's household context, or sends them to onboarding/login.
+ * Wrapped in React's cache() so calling it from both the layout and a page in the
+ * same request reuses one auth check + one query instead of doing it twice.
+ */
+export const requireHousehold = cache(async (): Promise<CurrentHousehold> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -51,7 +56,7 @@ export async function requireHousehold(): Promise<CurrentHousehold> {
     role: membership.role as Role,
     userId: user.id,
   };
-}
+});
 
 /** Bounces kid and sitter accounts to the dashboard — use on pages with financial/sensitive data (budget, debts, documents, etc). */
 export async function requireAdult(): Promise<CurrentHousehold> {

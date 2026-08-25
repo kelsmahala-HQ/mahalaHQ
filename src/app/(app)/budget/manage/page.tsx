@@ -2,7 +2,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
 import { deleteBill, updateBill } from "../actions";
 import AddBillForm from "../add-bill-form";
 import BillRow from "./bill-row";
@@ -28,10 +28,9 @@ export default async function ManageBillsPage() {
         ← Back to this week
       </Link>
 
-      <Card className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a bill</h2>
+      <CollapsibleCard title="Add a bill" className="mb-8">
         <AddBillForm todayStr={format(new Date(), "yyyy-MM-dd")} />
-      </Card>
+      </CollapsibleCard>
 
       <h2 className="mb-3 text-sm font-semibold text-slate-700">All bills</h2>
       {!bills?.length ? (

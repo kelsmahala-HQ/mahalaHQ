@@ -2,7 +2,7 @@ import Link from "next/link";
 import { addDays, addMonths, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek, subMonths } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { Card, PageHeader } from "@/components/ui";
+import { Card, CollapsibleCard, PageHeader } from "@/components/ui";
 import { deleteEvent, updateEvent, updateGoogleCalendarUrl } from "./actions";
 import FeedLink from "./feed-link";
 import EventPill from "./event-pill";
@@ -23,10 +23,10 @@ import FilterBar, { parseHidden } from "./filter-bar";
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; hide?: string }>;
+  searchParams: Promise<{ month?: string; hide?: string; add?: string }>;
 }) {
   const household = await requireHousehold();
-  const { month, hide } = await searchParams;
+  const { month, hide, add } = await searchParams;
   const hidden = parseHidden(hide);
   const anchor = month ? new Date(`${month}-01T00:00:00`) : new Date();
 
@@ -98,20 +98,31 @@ export default async function CalendarPage({
   const prevMonth = format(subMonths(monthStart, 1), "yyyy-MM");
   const nextMonth = format(addMonths(monthStart, 1), "yyyy-MM");
   const todayStr = format(new Date(), "yyyy-MM-dd");
+  const addEventDate = add && /^\d{4}-\d{2}-\d{2}$/.test(add) ? add : todayStr;
 
   return (
     <div>
       <PageHeader title="Calendar" subtitle="Shared household schedule." />
 
-      <Card className="mb-8">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">Add an event</h2>
-          <Link href={`/calendar/day?date=${todayStr}`} className="text-xs font-medium text-teal-600 hover:text-teal-500">
-            📋 Open Day Planner →
-          </Link>
-        </div>
-        <AddEventForm todayStr={todayStr} members={members} />
-      </Card>
+      <div id="add-event">
+        <CollapsibleCard
+          title={
+            <span className="flex items-center gap-2">
+              Add an event
+              {add && <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700">{addEventDate}</span>}
+            </span>
+          }
+          defaultOpen={!!add}
+          className="mb-8"
+        >
+          <div className="mb-3 flex justify-end">
+            <Link href={`/calendar/day?date=${todayStr}`} className="text-xs font-medium text-teal-600 hover:text-teal-500">
+              📋 Open Day Planner →
+            </Link>
+          </div>
+          <AddEventForm todayStr={addEventDate} members={members} />
+        </CollapsibleCard>
+      </div>
 
       <div className="mb-4 flex items-center justify-between">
         <Link href={`/calendar?month=${prevMonth}`} className="text-sm text-slate-500 hover:text-teal-600">
@@ -139,18 +150,31 @@ export default async function CalendarPage({
           const dayExternal = hidden.has("external") ? [] : (externalByDay.get(key) ?? []);
           const inMonth = day.getMonth() === monthStart.getMonth();
           const isToday = key === todayStr;
+          const addParams = new URLSearchParams();
+          if (month) addParams.set("month", month);
+          if (hide) addParams.set("hide", hide);
+          addParams.set("add", key);
           return (
             <div
               key={key}
               className={`min-h-24 p-1.5 ${isToday ? "bg-yellow-50" : "bg-white"} ${inMonth ? "" : "bg-slate-50 text-slate-300"}`}
             >
-              <Link
-                href={`/calendar/day?date=${key}`}
-                title="Open day view"
-                className={`mb-1 block text-right text-xs hover:underline ${isToday ? "font-bold text-teal-600" : "text-slate-400"}`}
-              >
-                {format(day, "d")}
-              </Link>
+              <div className="mb-1 flex items-center justify-between">
+                <Link
+                  href={`/calendar?${addParams.toString()}#add-event`}
+                  title="Add something on this day"
+                  className="rounded px-1 text-xs font-bold leading-none text-slate-300 hover:bg-teal-50 hover:text-teal-600"
+                >
+                  +
+                </Link>
+                <Link
+                  href={`/calendar/day?date=${key}`}
+                  title="Open day view"
+                  className={`text-right text-xs hover:underline ${isToday ? "font-bold text-teal-600" : "text-slate-400"}`}
+                >
+                  {format(day, "d")}
+                </Link>
+              </div>
               <div className="space-y-1">
                 {dayBills.map((b) => (
                   <Link

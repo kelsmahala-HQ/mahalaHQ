@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireCaregiver } from "@/lib/household";
-import { Card, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
+import { Card, CollapsibleCard, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { addContact, deleteContact } from "./actions";
 
 const CATEGORIES = ["medical", "family", "school", "work", "utility", "other"] as const;
@@ -33,8 +33,7 @@ export default async function ContactsPage() {
     <div>
       <PageHeader title="Emergency Contacts" subtitle="Doctors, school, family, and other important numbers." />
 
-      <Card className="mb-8">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Add a contact</h2>
+      <CollapsibleCard title="Add a contact" className="mb-8">
         <form action={addContact} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input name="name" required placeholder="Name" className={inputClass} />
           <input name="relationship" placeholder="Relationship (e.g. Pediatrician)" className={inputClass} />
@@ -52,7 +51,7 @@ export default async function ContactsPage() {
             Add contact
           </button>
         </form>
-      </Card>
+      </CollapsibleCard>
 
       {!contacts?.length ? (
         <EmptyState message="No contacts yet — add your first one above." />
