@@ -18,6 +18,8 @@ import {
 } from "@/lib/calendar-agenda";
 import TaskList from "./task-list";
 import QuickAddHour from "./quick-add-hour";
+import HourHighlightControl from "./hour-highlight-control";
+import { deleteHighlight } from "./highlight-actions";
 
 const HOUR_START = 6; // 6am
 const HOUR_END = 22; // 10pm row (last row covers 10-11pm)
@@ -82,6 +84,12 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
       .order("created_at"),
   ]);
 
+  const { data: highlights } = await supabase
+    .from("day_planner_highlights")
+    .select("id, start_hour, span_hours, color, label")
+    .eq("household_id", household.householdId)
+    .eq("date", dayStr);
+
   const todoTasks = (tasks ?? []).filter((t) => t.kind === "todo");
   const followupTasks = (tasks ?? []).filter((t) => t.kind === "followup");
 
@@ -113,6 +121,10 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
     const h = Math.min(HOUR_END, Math.max(HOUR_START, Math.floor(minutesOfDay(e.start_at) / 60)));
     if (!eventsByHour.has(h)) eventsByHour.set(h, []);
     eventsByHour.get(h)!.push(e);
+  }
+
+  function highlightCoversHour(h: { start_hour: number; span_hours: number }, hour: number) {
+    return hour >= h.start_hour && hour < h.start_hour + h.span_hours;
   }
 
   const prevDay = format(addDays(dayStart, -1), "yyyy-MM-dd");
@@ -203,14 +215,25 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
         <div className="divide-y divide-slate-100">
           {hours.map((hour) => {
             const hourEvents = eventsByHour.get(hour) ?? [];
-            const highlightsHere = highlightedEvents.filter((e) => coversHour(e, hour));
-            const rowColor = highlightsHere[0]?.highlight_color ?? undefined;
+            const manualHighlightsHere = (highlights ?? []).filter((h) => highlightCoversHour(h, hour));
+            const eventHighlightsHere = highlightedEvents.filter((e) => coversHour(e, hour));
+            const rowColor = manualHighlightsHere[0]?.color ?? eventHighlightsHere[0]?.highlight_color ?? undefined;
+            const labelsHere = manualHighlightsHere.filter((h) => h.start_hour === hour && h.label);
             return (
               <div key={hour} className="flex min-h-14" style={rowColor ? { backgroundColor: rowColor } : undefined}>
-                <div className="w-16 shrink-0 border-r border-slate-100 px-2 py-1.5 text-right text-xs text-slate-400">
-                  {hourLabel(hour)}
-                </div>
+                <HourHighlightControl date={dayStr} hour={hour} label={hourLabel(hour)} />
                 <div className="flex-1 space-y-1 px-2 py-1.5">
+                  {labelsHere.map((h) => (
+                    <div key={h.id} className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-slate-700">🖍️ {h.label}</span>
+                      <form action={deleteHighlight}>
+                        <input type="hidden" name="id" value={h.id} />
+                        <button type="submit" className="text-xs text-slate-400 hover:text-red-500">
+                          ✕
+                        </button>
+                      </form>
+                    </div>
+                  ))}
                   {hourEvents.map((e) => (
                     <EventPill
                       key={e.occurrenceKey}

@@ -466,6 +466,22 @@ create table if not exists push_subscriptions (
   created_at timestamptz not null default now()
 );
 
+-- Day Planner's quick hour highlighting -- click a time block, pick a color and an optional
+-- short label (e.g. "Babysitter"), done. Deliberately NOT a calendar_events row: this is pure
+-- visual context on the planner grid, not a scheduled thing with a title, so it doesn't clutter
+-- the hour's event list, and doesn't show up in the month view, Google Calendar feed, or push
+-- reminders. Whole-hour granularity, matching the grid's own resolution.
+create table if not exists day_planner_highlights (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  date date not null,
+  start_hour integer not null check (start_hour between 0 and 23),
+  span_hours integer not null default 1 check (span_hours between 1 and 24),
+  color text not null,
+  label text,
+  created_at timestamptz not null default now()
+);
+
 -- Day Planner's To-Do and Follow-up Calls/Emails lists -- simple per-day checklists, separate
 -- from calendar_events (which are time-scheduled) and from chores (which are point-scored
 -- household chores, not personal/work tasks).
@@ -568,7 +584,8 @@ declare
     'chore_completions', 'rewards', 'reward_redemptions',
     'maintenance_tasks', 'grocery_items', 'documents',
     'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
-    'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks'
+    'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks',
+    'day_planner_highlights'
   ];
 begin
   foreach t in array tables loop
