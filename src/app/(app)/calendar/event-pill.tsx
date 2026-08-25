@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { format } from "date-fns";
 import { buttonClass, inputClass } from "@/components/ui";
 import { wallClockDate } from "@/lib/wall-clock";
+import { EVENT_TYPES } from "./event-types";
 
 type EventData = {
   id: string;
@@ -13,6 +14,7 @@ type EventData = {
   assigned_to: string | null;
   assigned_member_id: string | null;
   start_at: string;
+  end_at: string | null;
   anchorStartAt: string;
   all_day: boolean;
   color: string;
@@ -39,6 +41,7 @@ export default function EventPill({ event, icon, members, deleteEvent, updateEve
   const anchor = wallClockDate(event.anchorStartAt);
   const dateStr = format(anchor, "yyyy-MM-dd");
   const timeStr = event.all_day ? "" : format(anchor, "HH:mm");
+  const endTimeStr = event.end_at ? format(wallClockDate(event.end_at), "HH:mm") : "";
 
   function close() {
     dialogRef.current?.close();
@@ -104,13 +107,18 @@ export default function EventPill({ event, icon, members, deleteEvent, updateEve
               <input name="time" type="time" defaultValue={timeStr} className={inputClass} />
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">End time (optional)</label>
+              <input name="end_time" type="time" defaultValue={endTimeStr} className={inputClass} />
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">Type</label>
               <select name="event_type" defaultValue={event.event_type} className={inputClass}>
-                <option value="general">General</option>
-                <option value="birthday">🎂 Birthday</option>
-                <option value="appointment">🏥 Appointment</option>
-                <option value="holiday">🎉 Holiday</option>
-                <option value="school">🏫 School</option>
+                {EVENT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.icon ? `${t.icon} ` : ""}
+                    {t.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -155,6 +163,7 @@ export default function EventPill({ event, icon, members, deleteEvent, updateEve
                 wallClockDate(event.start_at),
                 event.all_day ? "EEEE, MMMM d, yyyy" : "EEEE, MMMM d, yyyy 'at' h:mma"
               )}
+              {!event.all_day && event.end_at ? ` – ${format(wallClockDate(event.end_at), "h:mma")}` : ""}
             </p>
             {event.assigned_to && <p className="mb-1 text-sm text-slate-600">👤 {event.assigned_to}</p>}
             {event.location && <p className="mb-1 text-sm text-slate-600 break-words">📍 {event.location}</p>}

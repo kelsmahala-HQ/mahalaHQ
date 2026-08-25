@@ -138,13 +138,16 @@ alter table calendar_events add column if not exists event_type text not null de
 -- Links an event to a real family_profiles row instead of only a free-typed name -- null means
 -- "whole family" (a shared event), matching the existing assigned_to="" convention.
 alter table calendar_events add column if not exists assigned_member_id uuid references family_profiles(id) on delete set null;
+-- Adds work/college/babysitter categories for the hourly Day view -- drop+recreate (not "if not
+-- exists") so installs that already have this constraint still pick up the expanded value list.
 do $$
 begin
-  if not exists (select 1 from pg_constraint where conname = 'calendar_events_event_type_check') then
-    alter table calendar_events
-      add constraint calendar_events_event_type_check
-      check (event_type in ('general', 'birthday', 'appointment', 'holiday', 'school'));
+  if exists (select 1 from pg_constraint where conname = 'calendar_events_event_type_check') then
+    alter table calendar_events drop constraint calendar_events_event_type_check;
   end if;
+  alter table calendar_events
+    add constraint calendar_events_event_type_check
+    check (event_type in ('general', 'birthday', 'appointment', 'holiday', 'school', 'work', 'college', 'babysitter', 'pto', 'mba'));
 end $$;
 
 do $$

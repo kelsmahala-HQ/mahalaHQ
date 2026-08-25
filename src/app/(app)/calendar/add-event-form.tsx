@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
 import { addEvent } from "./actions";
+import { EVENT_TYPES } from "./event-types";
 
 export default function AddEventForm({
   todayStr,
@@ -47,15 +48,20 @@ export default function AddEventForm({
         <label className="mb-1 block text-xs font-medium text-slate-500">Time (leave blank for all-day)</label>
         <input name="time" type="time" className={inputClass} />
       </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-500">End time (optional)</label>
+        <input name="end_time" type="time" className={inputClass} />
+      </div>
 
       <div>
         <label className="mb-1 block text-xs font-medium text-slate-500">Type</label>
         <select name="event_type" defaultValue="general" className={inputClass}>
-          <option value="general">General</option>
-          <option value="birthday">🎂 Birthday</option>
-          <option value="appointment">🏥 Appointment</option>
-          <option value="holiday">🎉 Holiday</option>
-          <option value="school">🏫 School</option>
+          {EVENT_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.icon ? `${t.icon} ` : ""}
+              {t.label}
+            </option>
+          ))}
         </select>
       </div>
       <div>

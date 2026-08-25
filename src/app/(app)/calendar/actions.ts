@@ -11,8 +11,10 @@ export async function addEvent(formData: FormData): Promise<{ error: string } | 
 
   const date = formData.get("date") as string;
   const time = formData.get("time") as string;
+  const endTime = formData.get("end_time") as string;
   const allDay = !time;
   const startAt = allDay ? `${date}T00:00:00` : `${date}T${time}:00`;
+  const endAt = !allDay && endTime ? `${date}T${endTime}:00` : null;
   const assignedMemberId = (formData.get("assigned_member_id") as string) || null;
   const recurrence = (formData.get("recurrence") as string) || "none";
   const recurrenceEnd = (formData.get("recurrence_end") as string) || null;
@@ -31,6 +33,7 @@ export async function addEvent(formData: FormData): Promise<{ error: string } | 
     assigned_member_id: assignedMemberId,
     assigned_to: assignedTo,
     start_at: startAt,
+    end_at: endAt,
     all_day: allDay,
     color: colorForName(assignedTo || "shared"),
     recurrence,
@@ -52,8 +55,10 @@ export async function updateEvent(formData: FormData): Promise<{ error: string }
 
   const date = formData.get("date") as string;
   const time = formData.get("time") as string;
+  const endTime = formData.get("end_time") as string;
   const allDay = !time;
   const startAt = allDay ? `${date}T00:00:00` : `${date}T${time}:00`;
+  const endAt = !allDay && endTime ? `${date}T${endTime}:00` : null;
   const assignedMemberId = (formData.get("assigned_member_id") as string) || null;
   const recurrence = (formData.get("recurrence") as string) || "none";
   const recurrenceEnd = (formData.get("recurrence_end") as string) || null;
@@ -73,6 +78,7 @@ export async function updateEvent(formData: FormData): Promise<{ error: string }
       assigned_member_id: assignedMemberId,
       assigned_to: assignedTo,
       start_at: startAt,
+      end_at: endAt,
       all_day: allDay,
       color: colorForName(assignedTo || "shared"),
       recurrence,
