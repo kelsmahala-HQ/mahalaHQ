@@ -7,6 +7,7 @@ import { PAY_PERIOD_OPTS, applyReschedules, occurrenceInPeriod } from "@/lib/pay
 import { wallClockDate } from "@/lib/wall-clock";
 import KidDashboard from "./kid-dashboard";
 import SitterDashboard from "./sitter-dashboard";
+import InboxCard from "./inbox-card";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -39,6 +40,7 @@ export default async function DashboardPage() {
     { data: focusDebt },
     { data: roundupPurchases },
     { data: roundupPayouts },
+    { data: inboxItems },
   ] = await Promise.all([
     supabase
       .from("calendar_events")
@@ -87,6 +89,7 @@ export default async function DashboardPage() {
       .maybeSingle(),
     supabase.from("roundup_purchases").select("round_up").eq("household_id", household.householdId),
     supabase.from("roundup_payouts").select("amount").eq("household_id", household.householdId),
+    supabase.from("inbox_items").select("id, text").eq("household_id", household.householdId).order("created_at"),
   ]);
 
   const totalDebt = (debts ?? []).reduce((sum, d) => sum + Number(d.current_balance), 0);
@@ -119,6 +122,8 @@ export default async function DashboardPage() {
   return (
     <div>
       <PageHeader title={`Welcome, ${household.displayName}`} subtitle={household.householdName} />
+
+      <InboxCard items={inboxItems ?? []} />
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card className="flex items-center gap-3">
