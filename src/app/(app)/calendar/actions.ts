@@ -19,6 +19,7 @@ export async function addEvent(formData: FormData): Promise<{ error: string } | 
   const recurrence = (formData.get("recurrence") as string) || "none";
   const recurrenceEnd = (formData.get("recurrence_end") as string) || null;
   const eventType = (formData.get("event_type") as string) || "general";
+  const highlightColor = (formData.get("highlight_color") as string) || null;
 
   let assignedTo = "";
   if (assignedMemberId) {
@@ -39,6 +40,7 @@ export async function addEvent(formData: FormData): Promise<{ error: string } | 
     recurrence,
     recurrence_end: recurrence === "none" ? null : recurrenceEnd,
     event_type: eventType,
+    highlight_color: highlightColor,
     created_by: household.userId,
   });
 
@@ -63,6 +65,7 @@ export async function updateEvent(formData: FormData): Promise<{ error: string }
   const recurrence = (formData.get("recurrence") as string) || "none";
   const recurrenceEnd = (formData.get("recurrence_end") as string) || null;
   const eventType = (formData.get("event_type") as string) || "general";
+  const highlightColor = (formData.get("highlight_color") as string) || null;
 
   let assignedTo = "";
   if (assignedMemberId) {
@@ -84,6 +87,7 @@ export async function updateEvent(formData: FormData): Promise<{ error: string }
       recurrence,
       recurrence_end: recurrence === "none" ? null : recurrenceEnd,
       event_type: eventType,
+      highlight_color: highlightColor,
     })
     .eq("id", id);
 

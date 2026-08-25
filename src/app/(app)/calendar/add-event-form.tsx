@@ -4,6 +4,7 @@ import { useState } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
 import { addEvent } from "./actions";
 import { EVENT_TYPES } from "./event-types";
+import HighlightPicker from "./highlight-picker";
 
 export default function AddEventForm({
   todayStr,
@@ -80,6 +81,9 @@ export default function AddEventForm({
         <input name="recurrence_end" type="date" className={inputClass} />
       </div>
       <input name="location" placeholder="Location (optional)" className={inputClass} />
+      <div className="sm:col-span-2">
+        <HighlightPicker />
+      </div>
       {error && <p className="text-sm text-red-600 sm:col-span-2">{error}</p>}
       <button type="submit" disabled={loading} className={`${buttonClass} sm:col-span-2`}>
         {loading ? "Adding..." : "Add event"}

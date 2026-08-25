@@ -138,6 +138,12 @@ alter table calendar_events add column if not exists event_type text not null de
 -- Links an event to a real family_profiles row instead of only a free-typed name -- null means
 -- "whole family" (a shared event), matching the existing assigned_to="" convention.
 alter table calendar_events add column if not exists assigned_member_id uuid references family_profiles(id) on delete set null;
+
+-- Free-choice highlighter color for the Day Planner's hourly grid (e.g. yellow for one thing
+-- today, pink for something else tomorrow) -- independent of event_type/category, and null
+-- means no highlight. Not constrained to a fixed list since the whole point is picking whatever
+-- color makes sense in the moment.
+alter table calendar_events add column if not exists highlight_color text;
 -- Adds work/college/babysitter categories for the hourly Day view -- drop+recreate (not "if not
 -- exists") so installs that already have this constraint still pick up the expanded value list.
 do $$
@@ -460,6 +466,20 @@ create table if not exists push_subscriptions (
   created_at timestamptz not null default now()
 );
 
+-- Day Planner's To-Do and Follow-up Calls/Emails lists -- simple per-day checklists, separate
+-- from calendar_events (which are time-scheduled) and from chores (which are point-scored
+-- household chores, not personal/work tasks).
+create table if not exists day_planner_tasks (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  date date not null,
+  kind text not null check (kind in ('todo', 'followup')),
+  text text not null,
+  is_done boolean not null default false,
+  position integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
 -- Tracks which specific occurrence of a (possibly recurring) calendar event has already had
 -- its 1-day/2-hour reminder sent, since recurring events don't have a separate database row
 -- per occurrence. Written only by the scheduled Netlify function via the admin client -- no RLS
@@ -507,6 +527,7 @@ alter table roundup_payouts enable row level security;
 alter table plaid_items enable row level security;
 
 alter table push_subscriptions enable row level security;
+alter table day_planner_tasks enable row level security;
 
 -- calendar_event_reminders_sent intentionally gets NO policies either -- same lockdown as
 -- plaid_items, since it's only ever touched by the scheduled Netlify function.
@@ -547,7 +568,7 @@ declare
     'chore_completions', 'rewards', 'reward_redemptions',
     'maintenance_tasks', 'grocery_items', 'documents',
     'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
-    'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions'
+    'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks'
   ];
 begin
   foreach t in array tables loop

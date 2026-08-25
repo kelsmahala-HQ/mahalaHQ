@@ -13,6 +13,7 @@ export type CalendarEvent = {
   recurrence: string;
   recurrence_end: string | null;
   event_type: string;
+  highlight_color: string | null;
 };
 
 export function advance(date: Date, frequency: string): Date {

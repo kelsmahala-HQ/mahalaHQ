@@ -16,10 +16,13 @@ import {
   expandOccurrences,
   mergeBillMaps,
 } from "@/lib/calendar-agenda";
+import TaskList from "./task-list";
+import QuickAddHour from "./quick-add-hour";
 
 const HOUR_START = 6; // 6am
 const HOUR_END = 22; // 10pm row (last row covers 10-11pm)
-const BABYSITTER_DEFAULT_MINUTES = 180; // fallback span when no end time was set
+const DEFAULT_SPAN_MINUTES = 60; // fallback highlight span when an event has no end time
+const BABYSITTER_DEFAULT_MINUTES = 180; // babysitter blocks default to a longer span
 
 function hourLabel(hour: number) {
   const period = hour >= 12 ? "PM" : "AM";
@@ -43,7 +46,7 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
   const canSeeMoney = household.role === "admin" || household.role === "adult";
   const isKid = household.role === "kid";
 
-  const [{ data: events }, { data: debts }, { data: billsTable }, { data: chores }, { data: familyMembers }] = await Promise.all([
+  const [{ data: events }, { data: debts }, { data: billsTable }, { data: chores }, { data: familyMembers }, { data: tasks }] = await Promise.all([
     supabase
       .from("calendar_events")
       .select("*")
@@ -71,7 +74,16 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
       return query;
     })(),
     supabase.from("family_profiles").select("id, member_name").eq("household_id", household.householdId).order("member_name"),
+    supabase
+      .from("day_planner_tasks")
+      .select("id, kind, text, is_done")
+      .eq("household_id", household.householdId)
+      .eq("date", dayStr)
+      .order("created_at"),
   ]);
+
+  const todoTasks = (tasks ?? []).filter((t) => t.kind === "todo");
+  const followupTasks = (tasks ?? []).filter((t) => t.kind === "followup");
 
   const members = familyMembers ?? [];
   const occurrences = expandOccurrences((events ?? []) as CalendarEvent[], dayStart, dayEndExclusive);
@@ -82,22 +94,22 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
 
   const allDayEvents = occurrences.filter((e) => e.all_day);
   const timedEvents = occurrences.filter((e) => !e.all_day);
-  const babysitterEvents = timedEvents.filter((e) => e.event_type === "babysitter");
-  const regularTimedEvents = timedEvents.filter((e) => e.event_type !== "babysitter");
+  const highlightedEvents = timedEvents.filter((e) => e.highlight_color);
 
   const hours: number[] = [];
   for (let h = HOUR_START; h <= HOUR_END; h++) hours.push(h);
 
   function coversHour(e: (typeof timedEvents)[number], hour: number) {
     const startMin = minutesOfDay(e.start_at);
-    const endMin = e.end_at ? minutesOfDay(e.end_at) : startMin + BABYSITTER_DEFAULT_MINUTES;
+    const fallback = e.event_type === "babysitter" ? BABYSITTER_DEFAULT_MINUTES : DEFAULT_SPAN_MINUTES;
+    const endMin = e.end_at ? minutesOfDay(e.end_at) : startMin + fallback;
     const hourStartMin = hour * 60;
     const hourEndMin = hourStartMin + 60;
     return startMin < hourEndMin && endMin > hourStartMin;
   }
 
-  const eventsByHour = new Map<number, typeof regularTimedEvents>();
-  for (const e of regularTimedEvents) {
+  const eventsByHour = new Map<number, typeof timedEvents>();
+  for (const e of timedEvents) {
     const h = Math.min(HOUR_END, Math.max(HOUR_START, Math.floor(minutesOfDay(e.start_at) / 60)));
     if (!eventsByHour.has(h)) eventsByHour.set(h, []);
     eventsByHour.get(h)!.push(e);
@@ -158,6 +170,17 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
         </Card>
       )}
 
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">✅ To-Do</h2>
+          <TaskList date={dayStr} kind="todo" tasks={todoTasks} />
+        </Card>
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">📞 Follow-up Calls / Emails</h2>
+          <TaskList date={dayStr} kind="followup" tasks={followupTasks} />
+        </Card>
+      </div>
+
       {allDayEvents.length > 0 && (
         <Card className="mb-4">
           <p className="mb-2 text-xs font-semibold uppercase text-slate-400">All day</p>
@@ -180,20 +203,14 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
         <div className="divide-y divide-slate-100">
           {hours.map((hour) => {
             const hourEvents = eventsByHour.get(hour) ?? [];
-            const babysittersHere = babysitterEvents.filter((e) => coversHour(e, hour));
+            const highlightsHere = highlightedEvents.filter((e) => coversHour(e, hour));
+            const rowColor = highlightsHere[0]?.highlight_color ?? undefined;
             return (
-              <div key={hour} className={`flex min-h-14 ${babysittersHere.length ? "bg-amber-100/70" : ""}`}>
+              <div key={hour} className="flex min-h-14" style={rowColor ? { backgroundColor: rowColor } : undefined}>
                 <div className="w-16 shrink-0 border-r border-slate-100 px-2 py-1.5 text-right text-xs text-slate-400">
                   {hourLabel(hour)}
                 </div>
                 <div className="flex-1 space-y-1 px-2 py-1.5">
-                  {babysittersHere.map((e) =>
-                    Math.floor(minutesOfDay(e.start_at) / 60) === hour ? (
-                      <p key={e.occurrenceKey} className="text-xs font-semibold text-amber-800">
-                        🧑‍🍼 Babysitter — {e.title}
-                      </p>
-                    ) : null
-                  )}
                   {hourEvents.map((e) => (
                     <EventPill
                       key={e.occurrenceKey}
@@ -204,6 +221,7 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
                       updateEvent={updateEvent}
                     />
                   ))}
+                  <QuickAddHour date={dayStr} hour={`${String(hour).padStart(2, "0")}:00`} />
                 </div>
               </div>
             );

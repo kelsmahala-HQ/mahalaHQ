@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { buttonClass, inputClass } from "@/components/ui";
 import { wallClockDate } from "@/lib/wall-clock";
 import { EVENT_TYPES } from "./event-types";
+import HighlightPicker from "./highlight-picker";
 
 type EventData = {
   id: string;
@@ -21,6 +22,7 @@ type EventData = {
   recurrence: string;
   recurrence_end: string | null;
   event_type: string;
+  highlight_color: string | null;
   age: number | null;
 };
 
@@ -136,6 +138,9 @@ export default function EventPill({ event, icon, members, deleteEvent, updateEve
               <input name="recurrence_end" type="date" defaultValue={event.recurrence_end ?? ""} className={inputClass} />
             </div>
             <input name="location" defaultValue={event.location ?? ""} placeholder="Location (optional)" className={inputClass} />
+            <div className="sm:col-span-2">
+              <HighlightPicker defaultValue={event.highlight_color} />
+            </div>
             {error && <p className="text-sm text-red-600 sm:col-span-2">{error}</p>}
             <div className="flex gap-2 sm:col-span-2">
               <button type="submit" disabled={loading} className={buttonClass}>
