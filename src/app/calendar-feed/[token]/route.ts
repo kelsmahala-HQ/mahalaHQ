@@ -9,11 +9,33 @@ function icsDateTime(d: Date): string {
 }
 
 // Event times are entered as household-local wall-clock time and stored the same way (this app
-// doesn't do timezone conversion), so emitting them as ICS "floating" time — no Z/TZID — makes each
-// calendar app show the same digits the user typed, instead of re-interpreting the stored value as UTC.
-function icsFloatingDateTime(d: Date): string {
+// doesn't do timezone conversion), so these digits ARE the intended Eastern time — tagging them
+// TZID=America/New_York (see VTIMEZONE below) instead of leaving them "floating" is what's needed:
+// Google Calendar doesn't reliably honor floating time on *subscribed* feeds and falls back to UTC.
+function icsLocalDateTime(d: Date): string {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "");
 }
+
+const VTIMEZONE_EASTERN = [
+  "BEGIN:VTIMEZONE",
+  "TZID:America/New_York",
+  "X-LIC-LOCATION:America/New_York",
+  "BEGIN:DAYLIGHT",
+  "TZOFFSETFROM:-0500",
+  "TZOFFSETTO:-0400",
+  "TZNAME:EDT",
+  "DTSTART:19700308T020000",
+  "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
+  "END:DAYLIGHT",
+  "BEGIN:STANDARD",
+  "TZOFFSETFROM:-0400",
+  "TZOFFSETTO:-0500",
+  "TZNAME:EST",
+  "DTSTART:19701101T020000",
+  "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
+  "END:STANDARD",
+  "END:VTIMEZONE",
+].join("\r\n");
 
 function icsDate(d: Date): string {
   return icsDateTime(d).slice(0, 8);
@@ -74,7 +96,7 @@ function eventToVevents(e: CalEvent): string[] {
     dtEnd.setDate(dtEnd.getDate() + 1);
     lines.push(`DTSTART;VALUE=DATE:${icsDate(start)}`, `DTEND;VALUE=DATE:${icsDate(dtEnd)}`);
   } else {
-    lines.push(`DTSTART:${icsFloatingDateTime(start)}`);
+    lines.push(`DTSTART;TZID=America/New_York:${icsLocalDateTime(start)}`);
   }
 
   lines.push(`SUMMARY:${escapeIcs(e.title)}`);
@@ -117,6 +139,8 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
     "PRODID:-//Mahala HQ//EN",
     "CALSCALE:GREGORIAN",
     `X-WR-CALNAME:${escapeIcs(household.name)}`,
+    "X-WR-TIMEZONE:America/New_York",
+    VTIMEZONE_EASTERN,
     ...vevents,
     "END:VCALENDAR",
   ].join("\r\n");
