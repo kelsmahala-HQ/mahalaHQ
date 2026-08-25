@@ -2,7 +2,7 @@ import Link from "next/link";
 import { addDays, addMonths, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek, subMonths } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { Card, CollapsibleCard, PageHeader } from "@/components/ui";
+import { Card, CollapsibleCard, PageHeader, buttonClass } from "@/components/ui";
 import { deleteEvent, updateEvent, updateGoogleCalendarUrl } from "./actions";
 import FeedLink from "./feed-link";
 import EventPill from "./event-pill";
@@ -102,7 +102,12 @@ export default async function CalendarPage({
 
   return (
     <div>
-      <PageHeader title="Calendar" subtitle="Shared household schedule." />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader title="Calendar" subtitle="Shared household schedule." />
+        <Link href={`/calendar/day?date=${todayStr}`} className={`${buttonClass} shrink-0`}>
+          📋 Open Day Planner →
+        </Link>
+      </div>
 
       <div id="add-event">
         <CollapsibleCard
@@ -113,22 +118,17 @@ export default async function CalendarPage({
             </span>
           }
           defaultOpen={!!add}
-          className="mb-8"
+          className="mb-4 sm:mb-8"
         >
-          <div className="mb-3 flex justify-end">
-            <Link href={`/calendar/day?date=${todayStr}`} className="text-xs font-medium text-teal-600 hover:text-teal-500">
-              📋 Open Day Planner →
-            </Link>
-          </div>
           <AddEventForm todayStr={addEventDate} members={members} />
         </CollapsibleCard>
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between sm:mb-4">
         <Link href={`/calendar?month=${prevMonth}`} className="text-sm text-slate-500 hover:text-teal-600">
           ← Prev
         </Link>
-        <h2 className="text-lg font-semibold text-slate-900">{format(monthStart, "MMMM yyyy")}</h2>
+        <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{format(monthStart, "MMMM yyyy")}</h2>
         <Link href={`/calendar?month=${nextMonth}`} className="text-sm text-slate-500 hover:text-teal-600">
           Next →
         </Link>
@@ -138,8 +138,9 @@ export default async function CalendarPage({
 
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 text-xs">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} className="bg-slate-50 p-2 text-center font-medium text-slate-500">
-            {d}
+          <div key={d} className="bg-slate-50 p-1 text-center font-medium text-slate-500 sm:p-2">
+            <span className="sm:hidden">{d.slice(0, 1)}</span>
+            <span className="hidden sm:inline">{d}</span>
           </div>
         ))}
         {days.map((day) => {
@@ -163,20 +164,20 @@ export default async function CalendarPage({
           return (
             <div
               key={key}
-              className={`min-h-16 p-1.5 sm:min-h-24 ${isToday ? "bg-yellow-50" : "bg-white"} ${inMonth ? "" : "bg-slate-50 text-slate-300"}`}
+              className={`min-h-11 p-1 sm:min-h-24 sm:p-1.5 ${isToday ? "bg-yellow-50" : "bg-white"} ${inMonth ? "" : "bg-slate-50 text-slate-300"}`}
             >
-              <div className="mb-1 flex items-center justify-between">
+              <div className="flex items-center justify-between sm:mb-1">
                 <Link
                   href={`/calendar?${addParams.toString()}#add-event`}
                   title="Add something on this day"
-                  className="rounded px-1.5 py-0.5 text-xs font-bold leading-none text-slate-300 hover:bg-teal-50 hover:text-teal-600"
+                  className="rounded px-1 text-[11px] font-bold leading-none text-slate-300 hover:bg-teal-50 hover:text-teal-600 sm:px-1.5 sm:py-0.5 sm:text-xs"
                 >
                   +
                 </Link>
                 <Link
                   href={`/calendar/day?date=${key}`}
                   title="Open day view"
-                  className={`px-1 py-0.5 text-right text-xs hover:underline ${isToday ? "font-bold text-teal-600" : "text-slate-400"}`}
+                  className={`px-1 py-0.5 text-right text-[11px] hover:underline sm:text-xs ${isToday ? "font-bold text-teal-600" : "text-slate-400"}`}
                 >
                   {format(day, "d")}
                 </Link>
@@ -184,11 +185,11 @@ export default async function CalendarPage({
 
               {/* Mobile: compact dots instead of cramped text pills — tap the date above for full detail. */}
               {!!dots.length && (
-                <div className="flex flex-wrap items-center gap-1 sm:hidden">
-                  {dots.slice(0, 6).map((d, i) => (
-                    <span key={i} title={d.title} className={`h-1.5 w-1.5 shrink-0 rounded-full ${d.className ?? ""}`} style={d.style} />
+                <div className="flex flex-wrap items-center justify-center gap-0.5 sm:hidden">
+                  {dots.slice(0, 5).map((d, i) => (
+                    <span key={i} title={d.title} className={`h-1 w-1 shrink-0 rounded-full ${d.className ?? ""}`} style={d.style} />
                   ))}
-                  {dots.length > 6 && <span className="text-[10px] leading-none text-slate-400">+{dots.length - 6}</span>}
+                  {dots.length > 5 && <span className="text-[9px] leading-none text-slate-400">+{dots.length - 5}</span>}
                 </div>
               )}
 

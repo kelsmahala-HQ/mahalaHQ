@@ -28,11 +28,11 @@ export function CollapsibleCard({
 }) {
   return (
     <details open={defaultOpen} className={`group rounded-xl border border-slate-200 bg-white shadow-sm ${className}`}>
-      <summary className="flex cursor-pointer list-none items-center justify-between p-5 text-sm font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between p-3 text-sm font-semibold text-slate-700 sm:p-5 [&::-webkit-details-marker]:hidden">
         {title}
         <span className="ml-2 text-slate-400 transition-transform group-open:rotate-90">▸</span>
       </summary>
-      <div className="px-5 pb-5">{children}</div>
+      <div className="px-3 pb-3 sm:px-5 sm:pb-5">{children}</div>
     </details>
   );
 }

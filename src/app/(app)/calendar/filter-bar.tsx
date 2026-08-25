@@ -39,16 +39,15 @@ export default function FilterBar({
     return `${basePath}${qs ? `?${qs}` : ""}`;
   }
 
-  return (
-    <div className="mb-4 flex flex-wrap items-center gap-1.5">
-      <span className="mr-1 text-xs font-medium text-slate-400">Show:</span>
+  const chips = (
+    <>
       {allFilters.map((f) => {
         const isHidden = hidden.has(f.value);
         return (
           <Link
             key={f.value}
             href={hrefFor(f.value)}
-            className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium sm:px-2.5 sm:py-1 sm:text-xs ${
               isHidden ? "border-slate-200 bg-slate-50 text-slate-400 line-through" : "border-teal-200 bg-teal-50 text-teal-700"
             }`}
           >
@@ -62,6 +61,23 @@ export default function FilterBar({
           Reset
         </Link>
       )}
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile: chips collapse behind a toggle so the filter list doesn't push the grid below the fold. */}
+      <details className="mb-3 sm:hidden">
+        <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-400 [&::-webkit-details-marker]:hidden">
+          Show: {hidden.size > 0 ? `filtering (${hidden.size} hidden) ▾` : "everything ▾"}
+        </summary>
+        <div className="mt-2 flex flex-wrap items-center gap-1">{chips}</div>
+      </details>
+
+      <div className="mb-4 hidden flex-wrap items-center gap-1.5 sm:flex">
+        <span className="mr-1 text-xs font-medium text-slate-400">Show:</span>
+        {chips}
+      </div>
+    </>
   );
 }
