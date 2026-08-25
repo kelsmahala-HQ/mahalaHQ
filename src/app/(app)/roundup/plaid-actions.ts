@@ -122,6 +122,7 @@ export async function syncTransactions() {
           source: "plaid",
           plaid_transaction_id: txn.transaction_id,
           merchant_name: txn.merchant_name ?? txn.name,
+          purchased_at: txn.date,
         });
       }
 

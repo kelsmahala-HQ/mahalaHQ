@@ -167,7 +167,9 @@ export default async function RoundupPage() {
                 {p.merchant_name && <span className="text-slate-400"> · {currency(Number(p.amount))}</span>}
               </span>
               <span className="text-sm font-medium text-yellow-700">+{currency(Number(p.round_up))}</span>
-              <span className="text-xs text-slate-400">{new Date(p.created_at).toLocaleDateString()}</span>
+              <span className="text-xs text-slate-400">
+                {new Date(p.purchased_at ? `${p.purchased_at}T00:00:00` : p.created_at).toLocaleDateString()}
+              </span>
             </Card>
           ))}
         </div>

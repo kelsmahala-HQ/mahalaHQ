@@ -525,6 +525,10 @@ create table if not exists roundup_purchases (
 alter table roundup_purchases add column if not exists source text not null default 'manual';
 alter table roundup_purchases add column if not exists plaid_transaction_id text;
 alter table roundup_purchases add column if not exists merchant_name text;
+-- The actual date the purchase happened (from Plaid), vs. created_at which is when Mahala HQ
+-- synced it -- those can differ by days if you don't open Round-Up often. Null on rows synced
+-- before this column existed; the app falls back to created_at for those.
+alter table roundup_purchases add column if not exists purchased_at date;
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'roundup_purchases_plaid_transaction_id_key') then
