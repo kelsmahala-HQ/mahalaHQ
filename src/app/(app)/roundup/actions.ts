@@ -46,11 +46,24 @@ export async function addPurchase(formData: FormData) {
   revalidatePath("/roundup");
 }
 
-export async function sendPayout(formData: FormData) {
+export async function sendPayout(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
   const debtId = formData.get("debt_id") as string;
   const requestedAmount = Number(formData.get("amount"));
+
+  // Guards against a double-click/double-tap firing this twice before the page re-renders and
+  // hides the button -- without this, two near-simultaneous submissions can each read the same
+  // "available" balance and both insert a full payout, draining more than was actually saved.
+  const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString();
+  const { data: recentPayout } = await supabase
+    .from("roundup_payouts")
+    .select("id")
+    .eq("household_id", household.householdId)
+    .eq("debt_id", debtId)
+    .gte("created_at", tenSecondsAgo)
+    .maybeSingle();
+  if (recentPayout) return { error: "Already sent — give it a moment to update." };
 
   const [{ data: purchases }, { data: payouts }] = await Promise.all([
     supabase.from("roundup_purchases").select("round_up").eq("household_id", household.householdId),
@@ -62,17 +75,19 @@ export async function sendPayout(formData: FormData) {
   const available = totalSaved - totalPaidOut;
   const amount = Math.min(requestedAmount, available);
 
-  if (amount <= 0) return;
+  if (amount <= 0) return { error: "Nothing available to send." };
 
-  await supabase.from("roundup_payouts").insert({
+  const { error: insertError } = await supabase.from("roundup_payouts").insert({
     household_id: household.householdId,
     debt_id: debtId,
     amount,
   });
+  if (insertError) return { error: insertError.message };
 
   await applyDebtPayment(supabase, debtId, amount, { note: "Round-up payment" });
   await supabase.from("roundup_settings").upsert({ household_id: household.householdId, notified: false });
 
   revalidatePath("/roundup");
   revalidatePath("/debts");
+  return { success: true };
 }

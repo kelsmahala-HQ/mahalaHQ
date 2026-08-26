@@ -4,9 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdult } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
 import { calculateRoundUp } from "@/lib/roundup";
-import { addPurchase, sendPayout, updateSettings } from "./actions";
+import { addPurchase, updateSettings } from "./actions";
 import { removePlaidItem, syncTransactions } from "./plaid-actions";
 import PlaidLinkButton from "./plaid-link-button";
+import SendPayoutButton from "./send-payout-button";
 
 function currency(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -75,18 +76,7 @@ export default async function RoundupPage() {
           <div className="h-3 rounded-full bg-yellow-400" style={{ width: `${pct}%` }} />
         </div>
 
-        {readyToSend && (
-          <form action={sendPayout} className="mt-4">
-            <input type="hidden" name="debt_id" value={focusDebt!.id} />
-            <input type="hidden" name="amount" value={threshold} />
-            <button type="submit" className={buttonClass}>
-              Send {currency(threshold)} to {focusDebt!.name} 🎉
-            </button>
-            <p className="mt-1 text-xs text-slate-400">
-              This logs the payment here — you still need to actually send the money yourself.
-            </p>
-          </form>
-        )}
+        {readyToSend && <SendPayoutButton debtId={focusDebt!.id} amount={threshold} debtName={focusDebt!.name} />}
       </Card>
 
       <Card className="mb-8">
