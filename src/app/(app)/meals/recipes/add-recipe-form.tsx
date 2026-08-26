@@ -9,9 +9,13 @@ import type { ExtractedRecipe } from "@/lib/recipe-extract";
 export default function AddRecipeForm({
   initial,
   onSaved,
+  action = addRecipe,
+  recipeId,
 }: {
   initial?: ExtractedRecipe | null;
   onSaved?: () => void;
+  action?: (formData: FormData) => Promise<{ error: string } | { success: true }>;
+  recipeId?: string;
 }) {
   const [ingredientCount, setIngredientCount] = useState(Math.max(3, initial?.ingredients.length ?? 0));
   const [error, setError] = useState<string | null>(null);
@@ -23,13 +27,15 @@ export default function AddRecipeForm({
     setError(null);
     setLoading(true);
 
-    const result = await addRecipe(new FormData(form));
+    const result = await action(new FormData(form));
 
     setLoading(false);
     if ("error" in result) setError(result.error);
     else {
-      form.reset();
-      setIngredientCount(3);
+      if (!recipeId) {
+        form.reset();
+        setIngredientCount(3);
+      }
       onSaved?.();
     }
   }
@@ -38,6 +44,7 @@ export default function AddRecipeForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {recipeId && <input type="hidden" name="id" value={recipeId} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input name="name" required placeholder="Recipe name" defaultValue={initial?.name ?? ""} className={inputClass} />
         <input
@@ -91,7 +98,7 @@ export default function AddRecipeForm({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={loading} className={buttonClass}>
-        {loading ? "Saving..." : initial ? "Save reviewed recipe" : "Save recipe"}
+        {loading ? "Saving..." : recipeId ? "Save changes" : initial ? "Save reviewed recipe" : "Save recipe"}
       </button>
     </form>
   );
