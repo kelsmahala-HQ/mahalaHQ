@@ -71,7 +71,7 @@ export default function EventPill({ event, icon, members, deleteEvent, updateEve
         type="button"
         onClick={() => dialogRef.current?.showModal()}
         title="Click to view details"
-        className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium text-white"
+        className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium text-slate-800"
         style={{ backgroundColor: event.color }}
       >
         {event.recurrence !== "none" ? "↻ " : ""}

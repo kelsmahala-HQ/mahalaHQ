@@ -156,9 +156,9 @@ export default async function CalendarPage({
           if (hide) addParams.set("hide", hide);
           addParams.set("add", key);
           const dots: { className?: string; style?: React.CSSProperties; title: string }[] = [
-            ...dayBills.map((b) => ({ className: "bg-red-500", title: `💳 ${b.name} due` })),
-            ...dayChores.map((c) => ({ className: "bg-yellow-500", title: `🧹 ${c.title}` })),
-            ...dayExternal.map((ext) => ({ className: "bg-blue-500", title: ext.title })),
+            ...dayBills.map((b) => ({ className: "bg-rose-300", title: `💳 ${b.name} due` })),
+            ...dayChores.map((c) => ({ className: "bg-amber-300", title: `🧹 ${c.title}` })),
+            ...dayExternal.map((ext) => ({ className: "bg-sky-300", title: ext.title })),
             ...dayEvents.map((e) => ({ style: { backgroundColor: e.color }, title: e.title })),
           ];
           return (
@@ -199,7 +199,7 @@ export default async function CalendarPage({
                     key={b.key}
                     href={b.source === "debt" ? "/debts" : "/budget"}
                     title={`Bill due — click to open ${b.source === "debt" ? "Debts" : "Budget"}`}
-                    className="block truncate rounded bg-red-500 px-1.5 py-0.5 text-left text-[11px] font-medium text-white"
+                    className="block truncate rounded bg-rose-200 px-1.5 py-0.5 text-left text-[11px] font-medium text-rose-900"
                   >
                     💳 {b.name} due
                   </Link>
@@ -209,7 +209,7 @@ export default async function CalendarPage({
                     key={c.key}
                     href="/chores"
                     title={`Chore due — click to open Chores${c.assigned_to ? ` (${c.assigned_to})` : ""}`}
-                    className="block truncate rounded bg-yellow-500 px-1.5 py-0.5 text-left text-[11px] font-medium text-white"
+                    className="block truncate rounded bg-amber-200 px-1.5 py-0.5 text-left text-[11px] font-medium text-amber-900"
                   >
                     🧹 {c.title}
                   </Link>
@@ -218,7 +218,7 @@ export default async function CalendarPage({
                   <p
                     key={ext.key}
                     title={`From your Google Calendar${ext.allDay ? "" : ` — ${format(ext.startAt, "h:mma")}`}`}
-                    className="block truncate rounded bg-blue-500 px-1.5 py-0.5 text-left text-[11px] font-medium text-white"
+                    className="block truncate rounded bg-sky-200 px-1.5 py-0.5 text-left text-[11px] font-medium text-sky-900"
                   >
                     {ext.allDay ? "" : `${format(ext.startAt, "h:mma")} `}
                     {ext.title}

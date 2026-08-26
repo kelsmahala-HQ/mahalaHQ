@@ -180,13 +180,13 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
               <Link
                 key={b.key}
                 href={b.source === "debt" ? "/debts" : "/budget"}
-                className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-medium text-white"
+                className="rounded-full bg-rose-200 px-2 py-0.5 text-xs font-medium text-rose-900"
               >
                 💳 {b.name} due
               </Link>
             ))}
             {dayChores.map((c) => (
-              <Link key={c.key} href="/chores" className="rounded-full bg-yellow-500 px-2 py-0.5 text-xs font-medium text-white">
+              <Link key={c.key} href="/chores" className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-medium text-amber-900">
                 🧹 {c.title}
               </Link>
             ))}

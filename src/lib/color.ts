@@ -1,4 +1,7 @@
-const COLORS = ["#6366f1", "#ec4899", "#10b981", "#f59e0b", "#3b82f6", "#ef4444"];
+// Soft, pastel-leaning palette (teal to echo the app's own brand accent, plus five more
+// muted tones) -- paired with dark text wherever it's used, not white, since these are
+// too light for white text to stay readable on.
+const COLORS = ["#5eead4", "#fda4af", "#a5b4fc", "#fcd34d", "#7dd3fc", "#6ee7b7"];
 
 export function colorForName(name: string) {
   let hash = 0;
