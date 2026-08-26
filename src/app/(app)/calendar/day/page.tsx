@@ -20,18 +20,12 @@ import TaskList from "./task-list";
 import QuickAddHour from "./quick-add-hour";
 import HourHighlightControl from "./hour-highlight-control";
 import { deleteHighlight } from "./highlight-actions";
+import { toggleTask, unscheduleTask } from "./actions";
+import { HOUR_END, HOUR_START, hourLabel } from "./hours";
 import FilterBar, { parseHidden } from "../filter-bar";
 
-const HOUR_START = 6; // 6am
-const HOUR_END = 22; // 10pm row (last row covers 10-11pm)
 const DEFAULT_SPAN_MINUTES = 60; // fallback highlight span when an event has no end time
 const BABYSITTER_DEFAULT_MINUTES = 180; // babysitter blocks default to a longer span
-
-function hourLabel(hour: number) {
-  const period = hour >= 12 ? "PM" : "AM";
-  const h12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${h12} ${period}`;
-}
 
 function minutesOfDay(iso: string) {
   const d = wallClockDate(iso);
@@ -101,7 +95,7 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
     supabase.from("family_profiles").select("id, member_name").eq("household_id", household.householdId).order("member_name"),
     supabase
       .from("day_planner_tasks")
-      .select("id, kind, text, is_done")
+      .select("id, kind, text, is_done, scheduled_hour")
       .eq("household_id", household.householdId)
       .eq("date", dayStr)
       .order("created_at"),
@@ -145,6 +139,15 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
     const h = Math.min(HOUR_END, Math.max(HOUR_START, Math.floor(minutesOfDay(e.start_at) / 60)));
     if (!eventsByHour.has(h)) eventsByHour.set(h, []);
     eventsByHour.get(h)!.push(e);
+  }
+
+  // To-dos/follow-ups scheduled into a time block -- still the same row shown on the list
+  // above, just also shown here, so checking one off marks both.
+  const scheduledTasksByHour = new Map<number, NonNullable<typeof tasks>>();
+  for (const t of tasks ?? []) {
+    if (t.scheduled_hour === null) continue;
+    if (!scheduledTasksByHour.has(t.scheduled_hour)) scheduledTasksByHour.set(t.scheduled_hour, []);
+    scheduledTasksByHour.get(t.scheduled_hour)!.push(t);
   }
 
   function highlightCoversHour(h: { start_hour: number; span_hours: number }, hour: number) {
@@ -243,6 +246,7 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
             // (e.g. 11:30-12:30 shows a pill in both the 11 AM and 12 PM rows), so this hour
             // doesn't look free when it isn't.
             const continuingEvents = timedEvents.filter((e) => coversHour(e, hour) && !hourEvents.includes(e));
+            const scheduledTasksHere = scheduledTasksByHour.get(hour) ?? [];
             const manualHighlightsHere = (highlights ?? []).filter((h) => highlightCoversHour(h, hour));
             const eventHighlightsHere = highlightedEvents.filter((e) => coversHour(e, hour));
             const rowColor = manualHighlightsHere[0]?.color ?? eventHighlightsHere[0]?.highlight_color ?? undefined;
@@ -273,7 +277,37 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
                       size="block"
                     />
                   ))}
-                  {!hourEvents.length && !continuingEvents.length && (
+                  {scheduledTasksHere.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-2 rounded-lg px-3 py-2"
+                      style={{ backgroundColor: t.kind === "followup" ? "#a5b4fc" : "#5eead4" }}
+                    >
+                      <form action={toggleTask}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <input type="hidden" name="is_done" value={String(t.is_done)} />
+                        <button
+                          type="submit"
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs ${
+                            t.is_done ? "border-slate-700 bg-slate-700 text-white" : "border-slate-700/40 text-transparent"
+                          }`}
+                        >
+                          ✓
+                        </button>
+                      </form>
+                      <span className={`flex-1 text-sm font-medium ${t.is_done ? "text-slate-600 line-through" : "text-slate-800"}`}>
+                        {t.kind === "followup" ? "📞 " : "📝 "}
+                        {t.text}
+                      </span>
+                      <form action={unscheduleTask}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <button type="submit" title="Remove from time block (stays on your to-do list)" className="text-xs text-slate-700/60 hover:text-red-600">
+                          ✕
+                        </button>
+                      </form>
+                    </div>
+                  ))}
+                  {!hourEvents.length && !continuingEvents.length && !scheduledTasksHere.length && (
                     <QuickAddHour date={dayStr} hour={`${String(hour).padStart(2, "0")}:00`} />
                   )}
                 </div>

@@ -599,8 +599,22 @@ create table if not exists day_planner_tasks (
   text text not null,
   is_done boolean not null default false,
   position integer not null default 0,
+  -- Optional: also shows this same task as a block in the hourly grid, without removing it
+  -- from the To-Do/Follow-up list -- checking it off anywhere marks it done everywhere, since
+  -- it's the same row either way.
+  scheduled_hour integer check (scheduled_hour is null or (scheduled_hour >= 0 and scheduled_hour <= 23)),
   created_at timestamptz not null default now()
 );
+
+-- Adds scheduled_hour to day_planner_tasks for installs that ran an earlier version of this script.
+alter table day_planner_tasks add column if not exists scheduled_hour integer;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'day_planner_tasks_scheduled_hour_check') then
+    alter table day_planner_tasks add constraint day_planner_tasks_scheduled_hour_check
+      check (scheduled_hour is null or (scheduled_hour >= 0 and scheduled_hour <= 23));
+  end if;
+end $$;
 
 -- A quick, unsorted "dump it here" capture list on the Dashboard. Items don't stay in the
 -- inbox once handled -- they either get converted into a real to-do/follow-up/grocery item

@@ -51,6 +51,28 @@ export async function deleteTask(formData: FormData) {
   revalidateDay();
 }
 
+/** Shows a to-do/follow-up as a block in the hourly grid too, without removing it from its
+ *  list -- it's the same row, so checking it off anywhere marks it done everywhere. */
+export async function scheduleTask(formData: FormData) {
+  await requireHousehold();
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+  const hour = Number(formData.get("hour"));
+
+  await supabase.from("day_planner_tasks").update({ scheduled_hour: hour }).eq("id", id);
+  revalidateDay();
+}
+
+/** Removes a task's hourly-grid block while leaving it on its To-Do/Follow-up list. */
+export async function unscheduleTask(formData: FormData) {
+  await requireHousehold();
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  await supabase.from("day_planner_tasks").update({ scheduled_hour: null }).eq("id", id);
+  revalidateDay();
+}
+
 /** "Just type it in" quick entry for a hour block -- creates a minimal calendar_events row
  *  (same table the rest of the calendar uses, so it shows up everywhere events do) without
  *  going through the full Add Event form. */
