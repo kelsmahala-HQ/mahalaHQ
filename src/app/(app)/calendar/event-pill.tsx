@@ -32,9 +32,12 @@ type Props = {
   members: { id: string; member_name: string }[];
   deleteEvent: (formData: FormData) => void;
   updateEvent: (formData: FormData) => Promise<{ error: string } | { success: true }>;
+  /** "block" fills its row like a real appointment slot (Day Planner's hourly grid) instead of
+   *  staying a thin, truncated pill (month grid / all-day list, where space is tight). */
+  size?: "compact" | "block";
 };
 
-export default function EventPill({ event, icon, members, deleteEvent, updateEvent }: Props) {
+export default function EventPill({ event, icon, members, deleteEvent, updateEvent, size = "compact" }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,12 +74,20 @@ export default function EventPill({ event, icon, members, deleteEvent, updateEve
         type="button"
         onClick={() => dialogRef.current?.showModal()}
         title="Click to view details"
-        className="block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium text-slate-800"
+        className={
+          size === "block"
+            ? "block w-full min-h-11 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-800"
+            : "block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium text-slate-800"
+        }
         style={{ backgroundColor: event.color }}
       >
         {event.recurrence !== "none" ? "↻ " : ""}
         {icon ? `${icon} ` : ""}
-        {event.all_day ? "" : format(wallClockDate(event.start_at), "h:mma ")}
+        {event.all_day
+          ? ""
+          : endTimeStr && size === "block"
+            ? `${format(wallClockDate(event.start_at), "h:mma")} – ${format(wallClockDate(event.end_at!), "h:mma")} `
+            : format(wallClockDate(event.start_at), "h:mma ")}
         {event.title}
         {event.age ? ` (turns ${event.age})` : ""}
       </button>

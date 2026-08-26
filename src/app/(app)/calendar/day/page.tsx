@@ -266,9 +266,10 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
                       members={members}
                       deleteEvent={deleteEvent}
                       updateEvent={updateEvent}
+                      size="block"
                     />
                   ))}
-                  <QuickAddHour date={dayStr} hour={`${String(hour).padStart(2, "0")}:00`} />
+                  {!hourEvents.length && <QuickAddHour date={dayStr} hour={`${String(hour).padStart(2, "0")}:00`} />}
                 </div>
               </div>
             );
