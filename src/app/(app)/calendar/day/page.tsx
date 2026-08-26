@@ -239,6 +239,10 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
         <div className="divide-y divide-slate-100">
           {hours.map((hour) => {
             const hourEvents = eventsByHour.get(hour) ?? [];
+            // Events that started in an earlier hour but are still running through this one
+            // (e.g. 11:30-12:30 shows a pill in both the 11 AM and 12 PM rows), so this hour
+            // doesn't look free when it isn't.
+            const continuingEvents = timedEvents.filter((e) => coversHour(e, hour) && !hourEvents.includes(e));
             const manualHighlightsHere = (highlights ?? []).filter((h) => highlightCoversHour(h, hour));
             const eventHighlightsHere = highlightedEvents.filter((e) => coversHour(e, hour));
             const rowColor = manualHighlightsHere[0]?.color ?? eventHighlightsHere[0]?.highlight_color ?? undefined;
@@ -258,7 +262,7 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
                       </form>
                     </div>
                   ))}
-                  {hourEvents.map((e) => (
+                  {[...hourEvents, ...continuingEvents].map((e) => (
                     <EventPill
                       key={e.occurrenceKey}
                       event={e}
@@ -269,7 +273,9 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
                       size="block"
                     />
                   ))}
-                  {!hourEvents.length && <QuickAddHour date={dayStr} hour={`${String(hour).padStart(2, "0")}:00`} />}
+                  {!hourEvents.length && !continuingEvents.length && (
+                    <QuickAddHour date={dayStr} hour={`${String(hour).padStart(2, "0")}:00`} />
+                  )}
                 </div>
               </div>
             );
