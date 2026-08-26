@@ -42,13 +42,26 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
   const household = await requireHousehold();
   const { date, hide } = await searchParams;
   const hidden = parseHidden(hide);
-  const dayStr = date || format(new Date(), "yyyy-MM-dd");
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const dayStr = date || todayStr;
   const dayStart = new Date(`${dayStr}T00:00:00`);
   const dayEndExclusive = addDays(dayStart, 1);
 
   const supabase = await createClient();
   const canSeeMoney = household.role === "admin" || household.role === "adult";
   const isKid = household.role === "kid";
+
+  // Belt-and-suspenders for the scheduled Netlify function that's supposed to do this at 4am:
+  // whenever today's planner is actually opened, catch up any not-done items still sitting on
+  // an earlier date, so they show up here even if that overnight job didn't run.
+  if (dayStr === todayStr) {
+    await supabase
+      .from("day_planner_tasks")
+      .update({ date: todayStr })
+      .eq("household_id", household.householdId)
+      .eq("is_done", false)
+      .lt("date", todayStr);
+  }
 
   let assignedChoreIds: string[] | null = null;
   if (isKid) {
@@ -140,7 +153,6 @@ export default async function DayPlannerPage({ searchParams }: { searchParams: P
 
   const prevDay = format(addDays(dayStart, -1), "yyyy-MM-dd");
   const nextDay = format(addDays(dayStart, 1), "yyyy-MM-dd");
-  const todayStr = format(new Date(), "yyyy-MM-dd");
   const monthParam = format(dayStart, "yyyy-MM");
 
   return (
