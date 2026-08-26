@@ -33,7 +33,18 @@ async function rolloverTasks() {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!);
   const today = todayEasternDateStr();
 
-  await admin.from("day_planner_tasks").update({ date: today }).eq("is_done", false).lt("date", today);
+  const { data, error } = await admin
+    .from("day_planner_tasks")
+    .update({ date: today })
+    .eq("is_done", false)
+    .lt("date", today)
+    .select("id");
+
+  if (error) {
+    console.error("rollover-tasks: update failed:", error.message);
+    return;
+  }
+  console.log(`rollover-tasks: rolled ${data?.length ?? 0} task(s) forward to ${today}`);
 }
 
 export default rolloverTasks;
