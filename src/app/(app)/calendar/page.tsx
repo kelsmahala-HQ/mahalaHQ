@@ -125,11 +125,11 @@ export default async function CalendarPage({
       </div>
 
       <div className="mb-3 flex items-center justify-between sm:mb-4">
-        <Link href={`/calendar?month=${prevMonth}`} className="text-sm text-slate-500 hover:text-teal-600">
+        <Link href={`/calendar?month=${prevMonth}${hide ? `&hide=${hide}` : ""}`} className="text-sm text-slate-500 hover:text-teal-600">
           ← Prev
         </Link>
         <h2 className="text-base font-semibold text-slate-900 sm:text-lg">{format(monthStart, "MMMM yyyy")}</h2>
-        <Link href={`/calendar?month=${nextMonth}`} className="text-sm text-slate-500 hover:text-teal-600">
+        <Link href={`/calendar?month=${nextMonth}${hide ? `&hide=${hide}` : ""}`} className="text-sm text-slate-500 hover:text-teal-600">
           Next →
         </Link>
       </div>
