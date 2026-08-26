@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { Card, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
-import { deleteRecipe } from "./actions";
+import { EmptyState, PageHeader } from "@/components/ui";
+import { RECIPE_CATEGORIES, RECIPE_CATEGORY_LABELS } from "@/lib/recipe-categories";
 import RecipeFormPanel from "./recipe-form-panel";
+import RecipeCard from "./recipe-card";
 
 export default async function RecipesPage() {
   const household = await requireHousehold();
@@ -20,6 +21,15 @@ export default async function RecipesPage() {
     ingredientsByRecipe.get(ing.recipe_id)!.push(ing);
   }
 
+  const knownCategories = new Set(RECIPE_CATEGORIES.map((c) => c.value));
+  const recipesByCategory = new Map<string, NonNullable<typeof recipes>>();
+  for (const r of recipes ?? []) {
+    const key = knownCategories.has(r.category) ? r.category : "other";
+    if (!recipesByCategory.has(key)) recipesByCategory.set(key, []);
+    recipesByCategory.get(key)!.push(r);
+  }
+  const orderedCategoryKeys = [...RECIPE_CATEGORIES.map((c) => c.value), "other"];
+
   return (
     <div>
       <PageHeader title="Recipe Box" subtitle="Recipes you can drop straight into the meal planner." />
@@ -35,33 +45,22 @@ export default async function RecipesPage() {
       {!recipes?.length ? (
         <EmptyState message="No recipes yet — add one above." />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {recipes.map((r) => {
-            const ings = ingredientsByRecipe.get(r.id) ?? [];
+        <div className="space-y-8">
+          {orderedCategoryKeys.map((key) => {
+            const inCategory = recipesByCategory.get(key);
+            if (!inCategory?.length) return null;
+            const info = RECIPE_CATEGORY_LABELS[key] ?? { label: "Other", icon: "🍴" };
             return (
-              <Card key={r.id}>
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-slate-900">{r.name}</p>
-                    {r.servings && <p className="text-xs text-slate-400">Serves {r.servings}</p>}
-                  </div>
-                  <form action={deleteRecipe}>
-                    <input type="hidden" name="id" value={r.id} />
-                    <button className={iconButtonClass}>Remove</button>
-                  </form>
+              <div key={key}>
+                <h2 className="mb-3 text-sm font-semibold text-slate-700">
+                  {info.icon} {info.label}
+                </h2>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {inCategory.map((r) => (
+                    <RecipeCard key={r.id} recipe={r} ingredients={ingredientsByRecipe.get(r.id) ?? []} />
+                  ))}
                 </div>
-                {!!ings.length && (
-                  <ul className="mb-2 space-y-0.5 text-sm text-slate-600">
-                    {ings.map((ing) => (
-                      <li key={ing.id}>
-                        • {ing.quantity ? `${ing.quantity} ` : ""}
-                        {ing.name}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {r.instructions && <p className="whitespace-pre-wrap text-xs text-slate-500">{r.instructions}</p>}
-              </Card>
+              </div>
             );
           })}
         </div>

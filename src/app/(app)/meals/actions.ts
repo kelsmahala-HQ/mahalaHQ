@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
+import { parseQuantity } from "@/lib/quantity";
 
 export async function addMealPlanEntry(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
@@ -43,13 +44,6 @@ export async function deleteMealPlanEntry(formData: FormData) {
   revalidatePath("/meals");
 }
 
-/** Parses a free-text quantity like "2 cups" into a number + unit, or null if it doesn't start with one. */
-function parseQuantity(q: string): { amount: number; unit: string } | null {
-  const m = q.trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
-  if (!m) return null;
-  return { amount: Number(m[1]), unit: m[2].trim().toLowerCase() };
-}
-
 /** Combines same-named ingredients into one line, adding up quantities when the units match
  *  (e.g. "1 onion" + "1 onion" -> "2 onion"). When units differ or a quantity isn't a plain
  *  number, the quantities are listed together instead of guessed at (e.g. "2 cups + 1 tbsp"). */
@@ -67,7 +61,7 @@ function combineIngredients(items: { name: string; quantity: string | null }[]):
 
     const parsed = quantities.map(parseQuantity);
     const allParsed = parsed.every((p): p is { amount: number; unit: string } => p !== null);
-    const sameUnit = allParsed && parsed.every((p) => p!.unit === parsed[0]!.unit);
+    const sameUnit = allParsed && parsed.every((p) => p!.unit.toLowerCase() === parsed[0]!.unit.toLowerCase());
     if (allParsed && sameUnit) {
       const total = parsed.reduce((sum, p) => sum + p!.amount, 0);
       return { name: displayName, quantity: parsed[0]!.unit ? `${total} ${parsed[0]!.unit}` : String(total) };

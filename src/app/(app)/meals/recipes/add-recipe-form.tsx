@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
 import { addRecipe } from "./actions";
+import { RECIPE_CATEGORIES } from "@/lib/recipe-categories";
 import type { ExtractedRecipe } from "@/lib/recipe-extract";
 
 export default function AddRecipeForm({
@@ -47,6 +48,13 @@ export default function AddRecipeForm({
           defaultValue={initial?.servings ?? undefined}
           className={inputClass}
         />
+        <select name="category" defaultValue={initial?.category ?? "dinner"} className={`${inputClass} sm:col-span-2`}>
+          {RECIPE_CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.icon} {c.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>

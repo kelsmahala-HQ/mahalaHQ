@@ -1,7 +1,10 @@
+import { RECIPE_CATEGORY_VALUES } from "./recipe-categories";
+
 export type ExtractedRecipe = {
   name: string;
   servings: number | null;
   instructions: string | null;
+  category: string;
   ingredients: { name: string; quantity: string | null }[];
 };
 
@@ -60,12 +63,16 @@ export async function extractRecipeFromInput(input: string): Promise<ExtractedRe
   if ("error" in source) return source;
 
   const prompt = `Extract the recipe from the text below into strict JSON matching exactly this shape, with no markdown fences and no commentary before or after it:
-{"name": string, "servings": number|null, "instructions": string|null, "ingredients": [{"name": string, "quantity": string|null}]}
+{"name": string, "servings": number|null, "category": string, "instructions": string|null, "ingredients": [{"name": string, "quantity": string|null}]}
 
 Rules:
 - "quantity" is the amount and unit only (e.g. "2 cups", "1 tbsp"), never the ingredient name itself.
-- "instructions" is the step-by-step directions as one string, steps separated by newlines, or null if none are present in the text.
-- If the text below isn't actually a recipe, return {"name": "", "servings": null, "instructions": null, "ingredients": []}.
+- "category" is your best guess at which one of these this dish is: ${RECIPE_CATEGORY_VALUES.join(", ")}. Pick exactly one value from that list.
+- "instructions" is the step-by-step directions broken into short, single-action numbered steps
+  ("1. ...", "2. ...", one step per line, each line separated by a newline) -- split any long
+  paragraph from the source into separate numbered steps rather than copying it as one block.
+  Null if no directions are present in the text.
+- If the text below isn't actually a recipe, return {"name": "", "servings": null, "category": "dinner", "instructions": null, "ingredients": []}.
 
 TEXT:
 ${source.text}`;
@@ -107,9 +114,14 @@ ${source.text}`;
   const name = typeof parsed.name === "string" ? parsed.name.trim() : "";
   if (!name) return { error: "Couldn't find a recipe in that — try pasting more of the page's text." };
 
+  const category = typeof parsed.category === "string" && (RECIPE_CATEGORY_VALUES as string[]).includes(parsed.category)
+    ? parsed.category
+    : "dinner";
+
   return {
     name,
     servings: typeof parsed.servings === "number" && parsed.servings > 0 ? parsed.servings : null,
+    category,
     instructions: typeof parsed.instructions === "string" && parsed.instructions.trim() ? parsed.instructions.trim() : null,
     ingredients: normalizeIngredients(parsed.ingredients),
   };

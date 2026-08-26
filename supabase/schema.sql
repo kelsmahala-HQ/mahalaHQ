@@ -316,8 +316,13 @@ create table if not exists recipes (
   instructions text,
   servings integer,
   notes text,
+  category text not null default 'dinner', -- breakfast/lunch/dinner/side/dessert/crockpot/snack
   created_at timestamptz not null default now()
 );
+
+-- Adds category to recipes for installs that ran an earlier version of this script -- the
+-- default backfills every existing recipe as 'dinner' automatically.
+alter table recipes add column if not exists category text not null default 'dinner';
 
 create table if not exists recipe_ingredients (
   id uuid primary key default gen_random_uuid(),

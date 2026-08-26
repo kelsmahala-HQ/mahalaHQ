@@ -17,6 +17,7 @@ export async function addRecipe(formData: FormData): Promise<{ error: string } |
       name,
       servings: formData.get("servings") ? Number(formData.get("servings")) : null,
       instructions: (formData.get("instructions") as string) || null,
+      category: (formData.get("category") as string) || "dinner",
     })
     .select("id")
     .single();
