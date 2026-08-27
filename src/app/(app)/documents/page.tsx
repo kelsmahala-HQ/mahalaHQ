@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader, buttonClass, iconButtonClass, inputClass } from "@/components/ui";
@@ -19,6 +20,12 @@ export default async function DocumentsPage() {
   return (
     <div>
       <PageHeader title="Documents" subtitle="Insurance cards, warranties, IDs, and other household files." />
+
+      <div className="mb-6">
+        <Link href="/emergency-info" className="text-sm font-medium text-teal-600 hover:underline">
+          🆘 In Case of Emergency →
+        </Link>
+      </div>
 
       <CollapsibleCard title="Upload a document" className="mb-8">
         <form action={uploadDocument} className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -108,6 +108,18 @@ create table if not exists emergency_contacts (
   created_at timestamptz not null default now()
 );
 
+-- Free-text "if something happens to me" sections (never passwords -- just where things are
+-- and what to do). Auto-seeded with starter sections the first time a household visits the
+-- page; fully editable/addable/removable after that.
+create table if not exists emergency_info_sections (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  title text not null,
+  body text not null,
+  position integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
 -- ============================================================================
 -- Calendar
 -- ============================================================================
@@ -681,6 +693,7 @@ alter table plaid_items enable row level security;
 alter table push_subscriptions enable row level security;
 alter table day_planner_tasks enable row level security;
 alter table inbox_items enable row level security;
+alter table emergency_info_sections enable row level security;
 
 -- calendar_event_reminders_sent intentionally gets NO policies either -- same lockdown as
 -- plaid_items, since it's only ever touched by the scheduled Netlify function.
@@ -723,7 +736,7 @@ declare
     'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
     'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks',
     'day_planner_highlights', 'cleaning_tasks', 'recipes', 'recipe_ingredients', 'meal_plan_entries',
-    'chore_assignees', 'cleaning_task_assignees', 'inbox_items'
+    'chore_assignees', 'cleaning_task_assignees', 'inbox_items', 'emergency_info_sections'
   ];
 begin
   foreach t in array tables loop
