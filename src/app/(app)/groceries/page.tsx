@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, EmptyState, PageHeader, buttonClass, inputClass } from "@/components/ui";
-import { addItem, clearChecked, deleteItem, toggleItem } from "./actions";
+import { addItem, clearChecked } from "./actions";
+import GroceryItemRow from "./grocery-item-row";
 
 export default async function GroceriesPage() {
   const household = await requireHousehold();
@@ -36,28 +37,7 @@ export default async function GroceriesPage() {
         <>
           <div className="space-y-2">
             {items.map((item) => (
-              <Card key={item.id} className="flex items-center justify-between !p-3">
-                <form action={toggleItem} className="flex flex-1 items-center gap-3">
-                  <input type="hidden" name="id" value={item.id} />
-                  <input type="hidden" name="isChecked" value={String(item.is_checked)} />
-                  <button
-                    type="submit"
-                    className={`flex h-5 w-5 items-center justify-center rounded border ${
-                      item.is_checked ? "border-teal-600 bg-teal-600 text-white" : "border-slate-300"
-                    }`}
-                  >
-                    {item.is_checked && "✓"}
-                  </button>
-                  <span className={`text-sm ${item.is_checked ? "text-slate-400 line-through" : "text-slate-900"}`}>
-                    {item.name}
-                    {item.quantity && <span className="text-slate-400"> · {item.quantity}</span>}
-                  </span>
-                </form>
-                <form action={deleteItem}>
-                  <input type="hidden" name="id" value={item.id} />
-                  <button className="text-xs text-slate-400 hover:text-red-600">Remove</button>
-                </form>
-              </Card>
+              <GroceryItemRow key={item.id} item={item} />
             ))}
           </div>
           {hasChecked && (

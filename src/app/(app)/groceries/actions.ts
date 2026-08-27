@@ -19,6 +19,28 @@ export async function addItem(formData: FormData) {
   revalidatePath("/groceries");
 }
 
+export async function updateItem(formData: FormData): Promise<{ error: string } | { success: true }> {
+  const household = await requireHousehold();
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+  const name = (formData.get("name") as string)?.trim();
+  if (!name) return { error: "Name the item." };
+
+  const { error } = await supabase
+    .from("grocery_items")
+    .update({
+      name,
+      quantity: (formData.get("quantity") as string) || null,
+      category: (formData.get("category") as string) || "other",
+    })
+    .eq("id", id)
+    .eq("household_id", household.householdId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/groceries");
+  return { success: true };
+}
+
 export async function toggleItem(formData: FormData) {
   await requireHousehold();
   const supabase = await createClient();
