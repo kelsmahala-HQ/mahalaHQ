@@ -6,6 +6,19 @@ import { approveRedemption, denyRedemption, deleteReward } from "./rewards-actio
 import AddChoreForm from "./add-chore-form";
 import AddRewardForm from "./add-reward-form";
 
+const WEEKDAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function frequencyLabel(frequency: string, daysOfWeek: number[] | null) {
+  if (frequency === "weekly" && daysOfWeek?.length) {
+    return daysOfWeek
+      .slice()
+      .sort((a, b) => a - b)
+      .map((d) => WEEKDAY_ABBR[d])
+      .join("/");
+  }
+  return frequency;
+}
+
 export default async function ChoresPage() {
   const household = await requireHousehold();
   const supabase = await createClient();
@@ -109,7 +122,7 @@ export default async function ChoresPage() {
                 <p className="text-sm text-slate-500">
                   {[
                     !isKid ? chore.assigned_to : null,
-                    chore.frequency !== "once" ? chore.frequency : null,
+                    chore.frequency !== "once" ? frequencyLabel(chore.frequency, chore.days_of_week) : null,
                     chore.due_date ? `due ${chore.due_date}` : null,
                     chore.last_completed_at ? `last done ${new Date(chore.last_completed_at).toLocaleDateString()}` : null,
                   ]

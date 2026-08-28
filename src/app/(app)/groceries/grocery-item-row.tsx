@@ -2,9 +2,21 @@
 
 import { useState } from "react";
 import { Card, buttonClass, inputClass } from "@/components/ui";
+import { GROCERY_CATEGORIES } from "@/lib/grocery-categories";
 import { deleteItem, toggleItem, updateItem } from "./actions";
 
-type Item = { id: string; name: string; quantity: string | null; category: string | null; is_checked: boolean };
+type Item = {
+  id: string;
+  name: string;
+  quantity: string | null;
+  category: string | null;
+  price: number | null;
+  is_checked: boolean;
+};
+
+function currency(n: number) {
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
 
 export default function GroceryItemRow({ item }: { item: Item }) {
   const [editing, setEditing] = useState(false);
@@ -27,11 +39,26 @@ export default function GroceryItemRow({ item }: { item: Item }) {
   if (editing) {
     return (
       <Card className="!p-3">
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_100px_120px_auto_auto] sm:items-center">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_90px_100px_130px_auto_auto] sm:items-center">
           <input type="hidden" name="id" value={item.id} />
           <input name="name" required defaultValue={item.name} placeholder="Item" className={inputClass} />
           <input name="quantity" defaultValue={item.quantity ?? ""} placeholder="Qty" className={inputClass} />
-          <input name="category" defaultValue={item.category ?? ""} placeholder="Category" className={inputClass} />
+          <input
+            name="price"
+            type="number"
+            step="0.01"
+            min="0"
+            defaultValue={item.price ?? ""}
+            placeholder="Price"
+            className={inputClass}
+          />
+          <select name="category" defaultValue={item.category ?? "other"} className={inputClass}>
+            {GROCERY_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.icon} {c.label}
+              </option>
+            ))}
+          </select>
           <button type="submit" disabled={loading} className={buttonClass}>
             {loading ? "Saving..." : "Save"}
           </button>
@@ -63,6 +90,7 @@ export default function GroceryItemRow({ item }: { item: Item }) {
         </span>
       </form>
       <div className="flex shrink-0 items-center gap-3">
+        {item.price != null && <span className="text-sm font-medium text-slate-500">{currency(item.price)}</span>}
         <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-teal-600 hover:text-teal-500">
           Edit
         </button>

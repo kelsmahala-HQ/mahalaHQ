@@ -19,6 +19,8 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
   }
 
   const title = formData.get("title") as string;
+  const frequency = (formData.get("frequency") as string) || "once";
+  const daysOfWeek = (formData.getAll("days_of_week") as string[]).map(Number).filter((n) => !Number.isNaN(n));
 
   const { data: chore, error } = await supabase
     .from("chores")
@@ -27,7 +29,8 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
       title,
       assigned_member_id: assignedMemberIds[0] ?? null,
       assigned_to: assignedNames.join(", ") || null,
-      frequency: (formData.get("frequency") as string) || "once",
+      frequency,
+      days_of_week: frequency === "weekly" && daysOfWeek.length ? daysOfWeek : null,
       points: Number(formData.get("points") || 0),
       due_date: (formData.get("due_date") as string) || null,
     })
@@ -55,8 +58,20 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
   return { success: true };
 }
 
-function advanceDueDate(dateStr: string, frequency: string): string {
+function advanceDueDate(dateStr: string, frequency: string, daysOfWeek?: number[] | null): string {
   const d = new Date(`${dateStr}T00:00:00`);
+
+  if (frequency === "weekly" && daysOfWeek?.length) {
+    // Jump to the next date (after d) that falls on one of the selected weekdays -- e.g. Mon/
+    // Wed/Fri instead of a flat +7 days. Looping up to 14 days guarantees a hit even with a
+    // single selected day.
+    for (let i = 1; i <= 14; i++) {
+      const candidate = new Date(d);
+      candidate.setDate(candidate.getDate() + i);
+      if (daysOfWeek.includes(candidate.getDay())) return candidate.toISOString().slice(0, 10);
+    }
+  }
+
   switch (frequency) {
     case "daily":
       d.setDate(d.getDate() + 1);
@@ -99,7 +114,7 @@ export async function completeChore(formData: FormData) {
     // Recurring chores reset to open immediately so they reappear for the next cycle, and
     // the due date advances to the next occurrence -- otherwise the row looks unchanged
     // after marking it done, which just looks like the button didn't do anything.
-    const nextDue = chore.due_date ? advanceDueDate(chore.due_date, chore.frequency) : null;
+    const nextDue = chore.due_date ? advanceDueDate(chore.due_date, chore.frequency, chore.days_of_week) : null;
     const { error } = await supabase
       .from("chores")
       .update({ status: "open", last_completed_at: new Date().toISOString(), due_date: nextDue })

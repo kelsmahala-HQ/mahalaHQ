@@ -4,7 +4,18 @@ import { useState } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
 import { addChore } from "./actions";
 
+const WEEKDAYS = [
+  { value: 0, label: "Sun" },
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+];
+
 export default function AddChoreForm({ members }: { members: { id: string; display_name: string }[] }) {
+  const [frequency, setFrequency] = useState("weekly");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,7 +29,10 @@ export default function AddChoreForm({ members }: { members: { id: string; displ
 
     setLoading(false);
     if ("error" in result) setError(result.error);
-    else form.reset();
+    else {
+      form.reset();
+      setFrequency("weekly");
+    }
   }
 
   return (
@@ -35,13 +49,26 @@ export default function AddChoreForm({ members }: { members: { id: string; displ
           ))}
         </div>
       </div>
-      <select name="frequency" className={inputClass} defaultValue="weekly">
+      <select name="frequency" className={inputClass} value={frequency} onChange={(e) => setFrequency(e.target.value)}>
         <option value="once">One-time</option>
         <option value="daily">Daily</option>
         <option value="weekly">Weekly</option>
         <option value="monthly">Monthly</option>
       </select>
       <input name="points" type="number" min={0} placeholder="Points (optional)" className={inputClass} />
+      {frequency === "weekly" && (
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-xs font-medium text-slate-500">Repeat on specific days (optional — leave blank for every 7 days)</label>
+          <div className="flex flex-wrap gap-3">
+            {WEEKDAYS.map((d) => (
+              <label key={d.value} className="flex items-center gap-1.5 text-sm text-slate-700">
+                <input type="checkbox" name="days_of_week" value={d.value} className="accent-teal-600" />
+                {d.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <input name="due_date" type="date" className={inputClass} />
       {error && <p className="text-sm text-red-600 sm:col-span-2">{error}</p>}
       <button type="submit" disabled={loading} className={`${buttonClass} sm:col-span-2`}>

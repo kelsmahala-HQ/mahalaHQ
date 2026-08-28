@@ -212,6 +212,11 @@ begin
     check (frequency in ('once', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'));
 end $$;
 
+-- For a weekly chore, optionally pins it to specific weekdays (0=Sunday..6=Saturday) instead of
+-- a flat "+7 days" -- e.g. every Monday/Wednesday/Friday. Null/empty means "weekly" still just
+-- repeats every 7 days from its due date, unchanged.
+alter table chores add column if not exists days_of_week integer[];
+
 -- Lets a chore be assigned to more than one person (e.g. a two-person job). assigned_member_id/
 -- assigned_to above stay populated too (first assignee / comma-joined names) for anything that
 -- hasn't been updated to read this table -- this is the source of truth going forward.
@@ -368,9 +373,26 @@ create table if not exists grocery_items (
   name text not null,
   quantity text,
   category text not null default 'other',
+  price numeric(10, 2),
   is_checked boolean not null default false,
   added_by uuid references auth.users(id),
   created_at timestamptz not null default now()
+);
+
+-- Adds price to grocery_items for installs that ran an earlier version of this script.
+alter table grocery_items add column if not exists price numeric(10, 2);
+
+-- Remembers the last price typed in for an item by name, separate from grocery_items itself
+-- (which gets wiped by "Clear checked items") so a new "Milk" added next week can be prefilled
+-- with what it cost last time, for a running budget estimate.
+create table if not exists grocery_item_prices (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  name_key text not null, -- lowercased/trimmed name, used to match
+  display_name text not null,
+  last_price numeric(10, 2) not null,
+  updated_at timestamptz not null default now(),
+  unique (household_id, name_key)
 );
 
 -- ============================================================================
@@ -694,6 +716,7 @@ alter table push_subscriptions enable row level security;
 alter table day_planner_tasks enable row level security;
 alter table inbox_items enable row level security;
 alter table emergency_info_sections enable row level security;
+alter table grocery_item_prices enable row level security;
 
 -- calendar_event_reminders_sent intentionally gets NO policies either -- same lockdown as
 -- plaid_items, since it's only ever touched by the scheduled Netlify function.
@@ -736,7 +759,8 @@ declare
     'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
     'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks',
     'day_planner_highlights', 'cleaning_tasks', 'recipes', 'recipe_ingredients', 'meal_plan_entries',
-    'chore_assignees', 'cleaning_task_assignees', 'inbox_items', 'emergency_info_sections'
+    'chore_assignees', 'cleaning_task_assignees', 'inbox_items', 'emergency_info_sections',
+    'grocery_item_prices'
   ];
 begin
   foreach t in array tables loop
