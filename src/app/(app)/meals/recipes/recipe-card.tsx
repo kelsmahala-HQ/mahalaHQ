@@ -43,9 +43,9 @@ export default function RecipeCard({ recipe, ingredients }: { recipe: Recipe; in
           if (e.target === dialogRef.current) close();
         }}
         onClose={() => setEditing(false)}
-        className="w-[92vw] max-w-lg rounded-xl border border-slate-200 p-0 shadow-xl backdrop:bg-slate-900/40"
+        className="w-[92vw] max-w-2xl rounded-xl border border-slate-200 p-0 shadow-xl backdrop:bg-slate-900/40"
       >
-        <div className="max-h-[85vh] overflow-y-auto p-5">
+        <div className="max-h-[85vh] overflow-y-auto p-6">
           {editing ? (
             <>
               <AddRecipeForm
@@ -67,7 +67,7 @@ export default function RecipeCard({ recipe, ingredients }: { recipe: Recipe; in
           ) : (
             <>
               <div className="mb-3 flex items-start justify-between gap-2">
-                <h3 className="text-lg font-semibold text-slate-900 break-words">{recipe.name}</h3>
+                <h3 className="text-xl font-semibold text-slate-900 break-words">{recipe.name}</h3>
                 <button type="button" onClick={close} className="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Close">
                   ✕
                 </button>
@@ -100,7 +100,7 @@ export default function RecipeCard({ recipe, ingredients }: { recipe: Recipe; in
               ) : null}
 
               {!!ingredients.length && (
-                <ul className="mb-4 space-y-1 text-sm text-slate-700">
+                <ul className="mb-4 space-y-1.5 text-base text-slate-700">
                   {ingredients.map((ing) => (
                     <li key={ing.id}>
                       • {ing.quantity ? `${factor !== 1 ? scaleQuantity(ing.quantity, factor) : ing.quantity} ` : ""}
@@ -110,7 +110,7 @@ export default function RecipeCard({ recipe, ingredients }: { recipe: Recipe; in
                 </ul>
               )}
 
-              {recipe.instructions && <p className="mb-5 whitespace-pre-wrap text-sm text-slate-600">{recipe.instructions}</p>}
+              {recipe.instructions && <p className="mb-5 whitespace-pre-wrap text-base leading-relaxed text-slate-600">{recipe.instructions}</p>}
 
               <div className="flex gap-2">
                 <button
