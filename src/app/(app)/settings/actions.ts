@@ -21,6 +21,28 @@ export async function updateMemberRole(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+export async function updateMemberName(formData: FormData) {
+  const household = await requireHousehold();
+  const memberId = formData.get("member_id") as string;
+  const name = (formData.get("display_name") as string)?.trim();
+  if (!name) return;
+
+  if (memberId === household.memberId) {
+    // Editing your own row is allowed via the normal client (RLS permits self-updates).
+    const supabase = await createClient();
+    await supabase.from("household_members").update({ display_name: name }).eq("id", memberId);
+  } else if (household.role === "admin") {
+    // Editing someone else's row requires the admin client -- RLS only allows self-updates.
+    const admin = createAdminClient();
+    await admin.from("household_members").update({ display_name: name }).eq("id", memberId).eq("household_id", household.householdId);
+  } else {
+    return;
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+}
+
 export async function updateMemberPhone(formData: FormData) {
   const household = await requireHousehold();
   const memberId = formData.get("member_id") as string;

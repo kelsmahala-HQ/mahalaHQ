@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, PageHeader, inputClass } from "@/components/ui";
-import { updateMemberPhone, updateMemberRole } from "./actions";
+import { updateMemberName, updateMemberPhone, updateMemberRole } from "./actions";
 import InviteEmailForm from "./invite-email-form";
 import PushToggle from "./push-toggle";
 
@@ -52,12 +52,28 @@ export default async function SettingsPage() {
             const isSelf = m.id === household.memberId;
             return (
               <div key={m.id} className="rounded-lg bg-slate-50 px-3 py-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-900">
-                    {m.display_name}
-                    {isSelf && <span className="ml-2 text-xs text-slate-400">(you)</span>}
-                  </p>
+                <div className="mb-2">
+                  {isSelf || household.role === "admin" ? (
+                    <form action={updateMemberName} className="flex items-center gap-2">
+                      <input type="hidden" name="member_id" value={m.id} />
+                      <input
+                        name="display_name"
+                        required
+                        defaultValue={m.display_name}
+                        className={`${inputClass} w-48 !py-1 text-sm font-medium`}
+                      />
+                      {isSelf && <span className="text-xs text-slate-400">(you)</span>}
+                      <button type="submit" className="rounded-lg bg-teal-50 px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
+                        Save
+                      </button>
+                    </form>
+                  ) : (
+                    <p className="text-sm font-medium text-slate-900">{m.display_name}</p>
+                  )}
+                </div>
 
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Role:</span>
                   {household.role === "admin" && !isSelf ? (
                     <form action={updateMemberRole} className="flex items-center gap-2">
                       <input type="hidden" name="member_id" value={m.id} />
