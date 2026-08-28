@@ -165,7 +165,7 @@ export default async function DashboardPage() {
                 <li key={e.id} className="flex items-center gap-2 text-sm">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
                   <span className="text-slate-400">
-                    {wallClockDate(e.start_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                    {format(wallClockDate(e.start_at), e.all_day ? "EEE, MMM d" : "EEE, MMM d 'at' h:mma")}
                   </span>
                   <span className="text-slate-900">{e.title}</span>
                 </li>

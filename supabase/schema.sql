@@ -301,8 +301,12 @@ create table if not exists cleaning_tasks (
   last_done_at date,
   next_due_at date,
   notes text,
+  days_of_week integer[], -- for weekly tasks: pin to specific weekdays (0=Sun..6=Sat) instead of a flat +7 days
   created_at timestamptz not null default now()
 );
+
+-- Adds days_of_week to cleaning_tasks for installs that ran an earlier version of this script.
+alter table cleaning_tasks add column if not exists days_of_week integer[];
 
 -- Same multi-assignee support as chore_assignees, for the same reason (a two-person job).
 create table if not exists cleaning_task_assignees (

@@ -1,22 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
+import { daysOfWeekLabel } from "@/lib/weekdays";
 import { completeChore, deleteChore } from "./actions";
 import { approveRedemption, denyRedemption, deleteReward } from "./rewards-actions";
 import AddChoreForm from "./add-chore-form";
 import AddRewardForm from "./add-reward-form";
 
-const WEEKDAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 function frequencyLabel(frequency: string, daysOfWeek: number[] | null) {
-  if (frequency === "weekly" && daysOfWeek?.length) {
-    return daysOfWeek
-      .slice()
-      .sort((a, b) => a - b)
-      .map((d) => WEEKDAY_ABBR[d])
-      .join("/");
-  }
-  return frequency;
+  return daysOfWeekLabel(daysOfWeek) ?? frequency;
 }
 
 export default async function ChoresPage() {

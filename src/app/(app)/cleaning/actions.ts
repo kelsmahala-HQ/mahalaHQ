@@ -3,8 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
+import { nextMatchingWeekday } from "@/lib/weekdays";
 
-function addInterval(date: Date, frequency: string): Date {
+function addInterval(date: Date, frequency: string, daysOfWeek?: number[] | null): Date {
+  if (frequency === "weekly" && daysOfWeek?.length) return nextMatchingWeekday(date, daysOfWeek);
+
   const d = new Date(date);
   switch (frequency) {
     case "daily":
@@ -33,6 +36,7 @@ export async function addCleaningTask(formData: FormData): Promise<{ error: stri
   const assignedMemberIds = (formData.getAll("assigned_member_id") as string[]).filter(Boolean);
   const title = (formData.get("title") as string)?.trim();
   const frequency = formData.get("frequency") as string;
+  const daysOfWeek = (formData.getAll("days_of_week") as string[]).map(Number).filter((n) => !Number.isNaN(n));
 
   if (!title) return { error: "Name the task." };
   if (!["daily", "weekly", "monthly", "quarterly", "yearly"].includes(frequency)) return { error: "Pick a frequency." };
@@ -51,6 +55,7 @@ export async function addCleaningTask(formData: FormData): Promise<{ error: stri
       household_id: household.householdId,
       title,
       frequency,
+      days_of_week: frequency === "weekly" && daysOfWeek.length ? daysOfWeek : null,
       assigned_member_id: assignedMemberIds[0] ?? null,
       assigned_to: assignedNames.join(", ") || null,
       next_due_at: (formData.get("next_due_at") as string) || new Date().toISOString().slice(0, 10),
@@ -76,10 +81,12 @@ export async function markCleaningTaskDone(formData: FormData) {
   await requireHousehold();
   const supabase = await createClient();
   const id = formData.get("id") as string;
-  const frequency = formData.get("frequency") as string;
-  const today = new Date();
 
-  const nextDue = addInterval(today, frequency).toISOString().slice(0, 10);
+  const { data: task } = await supabase.from("cleaning_tasks").select("frequency, days_of_week").eq("id", id).single();
+  if (!task) return;
+
+  const today = new Date();
+  const nextDue = addInterval(today, task.frequency, task.days_of_week).toISOString().slice(0, 10);
 
   await supabase
     .from("cleaning_tasks")
@@ -121,6 +128,7 @@ export async function syncCleaningTaskToChore(formData: FormData): Promise<{ err
       assigned_member_id: memberIds[0] ?? null,
       assigned_to: task.assigned_to,
       frequency: task.frequency,
+      days_of_week: task.days_of_week,
       points,
       due_date: task.next_due_at,
       cleaning_task_id: task.id,

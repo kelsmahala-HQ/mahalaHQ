@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
+import { WEEKDAYS } from "@/lib/weekdays";
 import { addCleaningTask } from "./actions";
 
 export default function AddCleaningTaskForm({ members }: { members: { id: string; display_name: string }[] }) {
+  const [frequency, setFrequency] = useState("weekly");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,13 +20,16 @@ export default function AddCleaningTaskForm({ members }: { members: { id: string
 
     setLoading(false);
     if ("error" in result) setError(result.error);
-    else form.reset();
+    else {
+      form.reset();
+      setFrequency("weekly");
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <input name="title" required placeholder="Task (e.g. Vacuum living room)" className={`${inputClass} sm:col-span-2`} />
-      <select name="frequency" defaultValue="weekly" className={inputClass}>
+      <select name="frequency" value={frequency} onChange={(e) => setFrequency(e.target.value)} className={inputClass}>
         <option value="daily">Daily</option>
         <option value="weekly">Weekly</option>
         <option value="monthly">Monthly</option>
@@ -42,6 +47,19 @@ export default function AddCleaningTaskForm({ members }: { members: { id: string
           ))}
         </div>
       </div>
+      {frequency === "weekly" && (
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-xs font-medium text-slate-500">Repeat on specific days (optional — leave blank for every 7 days)</label>
+          <div className="flex flex-wrap gap-3">
+            {WEEKDAYS.map((d) => (
+              <label key={d.value} className="flex items-center gap-1.5 text-sm text-slate-700">
+                <input type="checkbox" name="days_of_week" value={d.value} className="accent-teal-600" />
+                {d.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <div>
         <label className="mb-1 block text-xs font-medium text-slate-500">First due (optional, defaults to today)</label>
         <input name="next_due_at" type="date" className={inputClass} />

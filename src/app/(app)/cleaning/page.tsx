@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
+import { daysOfWeekLabel } from "@/lib/weekdays";
 import { deleteCleaningTask, markCleaningTaskDone } from "./actions";
 import AddCleaningTaskForm from "./add-cleaning-task-form";
 import SyncToChoreForm from "./sync-to-chore-form";
@@ -61,6 +62,7 @@ export default async function CleaningPage() {
                           <p className={`text-sm ${overdue ? "font-medium text-red-600" : "text-slate-500"}`}>
                             {[
                               task.assigned_to,
+                              daysOfWeekLabel(task.days_of_week),
                               task.next_due_at ? `${overdue ? "overdue since" : "due"} ${task.next_due_at}` : null,
                               task.last_done_at ? `last done ${task.last_done_at}` : null,
                             ]
@@ -77,7 +79,6 @@ export default async function CleaningPage() {
                           )}
                           <form action={markCleaningTaskDone}>
                             <input type="hidden" name="id" value={task.id} />
-                            <input type="hidden" name="frequency" value={task.frequency} />
                             <button className="rounded-lg bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
                               Mark done
                             </button>

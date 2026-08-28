@@ -2,17 +2,8 @@
 
 import { useState } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
+import { WEEKDAYS } from "@/lib/weekdays";
 import { addChore } from "./actions";
-
-const WEEKDAYS = [
-  { value: 0, label: "Sun" },
-  { value: 1, label: "Mon" },
-  { value: 2, label: "Tue" },
-  { value: 3, label: "Wed" },
-  { value: 4, label: "Thu" },
-  { value: 5, label: "Fri" },
-  { value: 6, label: "Sat" },
-];
 
 export default function AddChoreForm({ members }: { members: { id: string; display_name: string }[] }) {
   const [frequency, setFrequency] = useState("weekly");
