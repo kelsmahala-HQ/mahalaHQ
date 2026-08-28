@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, buttonClass, inputClass } from "@/components/ui";
 import { GROCERY_CATEGORIES } from "@/lib/grocery-categories";
+import { quantityMultiplier } from "@/lib/quantity";
 import { deleteItem, toggleItem, updateItem } from "./actions";
 
 type Item = {
@@ -49,7 +50,8 @@ export default function GroceryItemRow({ item }: { item: Item }) {
             step="0.01"
             min="0"
             defaultValue={item.price ?? ""}
-            placeholder="Price"
+            placeholder="Price ea"
+            title="Price per item -- multiplied by the number in Qty for the total"
             className={inputClass}
           />
           <select name="category" defaultValue={item.category ?? "other"} className={inputClass}>
@@ -90,7 +92,15 @@ export default function GroceryItemRow({ item }: { item: Item }) {
         </span>
       </form>
       <div className="flex shrink-0 items-center gap-3">
-        {item.price != null && <span className="text-sm font-medium text-slate-500">{currency(item.price)}</span>}
+        {item.price != null && (() => {
+          const multiplier = quantityMultiplier(item.quantity);
+          return (
+            <span className="text-sm font-medium text-slate-500">
+              {currency(item.price * multiplier)}
+              {multiplier !== 1 && <span className="ml-1 text-xs font-normal text-slate-400">({currency(item.price)} ea)</span>}
+            </span>
+          );
+        })()}
         <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-teal-600 hover:text-teal-500">
           Edit
         </button>

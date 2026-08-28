@@ -50,3 +50,10 @@ export function scaleQuantity(quantity: string, factor: number): string {
   const scaled = formatAmount(parsed.amount * factor);
   return parsed.unit ? `${scaled} ${parsed.unit}` : scaled;
 }
+
+/** The leading number in a quantity like "2 boxes" or "3" -- 1 if there isn't one (e.g. "a dozen",
+ *  blank). Used to multiply a per-item price out into a line total. */
+export function quantityMultiplier(quantity: string | null | undefined): number {
+  if (!quantity) return 1;
+  return parseQuantity(quantity)?.amount ?? 1;
+}

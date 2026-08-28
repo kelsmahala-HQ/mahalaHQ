@@ -35,7 +35,8 @@ export default function AddGroceryItemForm() {
         type="number"
         step="0.01"
         min="0"
-        placeholder="Price"
+        placeholder="Price ea"
+        title="Price per item -- multiplied by the number in Qty for the total"
         value={price}
         onChange={(e) => setPrice(e.target.value)}
         className={inputClass}

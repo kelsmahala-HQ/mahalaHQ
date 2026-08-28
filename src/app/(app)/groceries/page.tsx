@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { GROCERY_CATEGORIES, GROCERY_CATEGORY_LABELS } from "@/lib/grocery-categories";
+import { quantityMultiplier } from "@/lib/quantity";
 import { clearChecked } from "./actions";
 import AddGroceryItemForm from "./add-grocery-item-form";
 import GroceryItemRow from "./grocery-item-row";
@@ -32,7 +33,7 @@ export default async function GroceriesPage() {
   const orderedCategoryKeys = GROCERY_CATEGORIES.map((c) => c.value);
 
   const priced = (items ?? []).filter((i) => i.price != null);
-  const total = priced.reduce((sum, i) => sum + Number(i.price), 0);
+  const total = priced.reduce((sum, i) => sum + Number(i.price) * quantityMultiplier(i.quantity), 0);
   const uncounted = (items?.length ?? 0) - priced.length;
 
   return (
