@@ -126,8 +126,8 @@ export default async function ChoresPage() {
                 <form action={completeChore}>
                   <input type="hidden" name="id" value={chore.id} />
                   <input type="hidden" name="frequency" value={chore.frequency} />
-                  <button className="rounded-lg bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
-                    {chore.status === "done" ? "Done ✓" : "Mark done"}
+                  <button className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-bold text-white hover:bg-teal-600">
+                    {chore.status === "done" ? "Done! ✅" : "Mark done ✅"}
                   </button>
                 </form>
                 {canManage && (
