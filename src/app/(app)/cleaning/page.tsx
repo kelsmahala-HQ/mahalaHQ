@@ -79,8 +79,8 @@ export default async function CleaningPage() {
                           )}
                           <form action={markCleaningTaskDone}>
                             <input type="hidden" name="id" value={task.id} />
-                            <button className="rounded-lg bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
-                              Mark done
+                            <button className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-bold text-white hover:bg-teal-600">
+                              Mark done ✅
                             </button>
                           </form>
                           <form action={deleteCleaningTask}>
