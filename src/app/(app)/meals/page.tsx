@@ -3,7 +3,7 @@ import { Fragment } from "react";
 import { addDays, addWeeks, format, startOfWeek, subWeeks } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { PageHeader } from "@/components/ui";
+import { Card, PageHeader } from "@/components/ui";
 import { deleteMealPlanEntry } from "./actions";
 import AddMealEntry from "./add-meal-entry";
 import AddWeekToGroceriesButton from "./add-week-to-groceries-button";
@@ -61,7 +61,43 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
         </Link>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Mobile: one card per day, meal types stacked -- the 7-column grid below needs real
+          width to be usable, so it's desktop/tablet only. */}
+      <div className="space-y-4 sm:hidden">
+        {days.map((day) => {
+          const dateStr = format(day, "yyyy-MM-dd");
+          return (
+            <Card key={dateStr}>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">{format(day, "EEEE, MMM d")}</h3>
+              <div className="space-y-3">
+                {MEAL_TYPES.map((meal) => {
+                  const key = `${dateStr}-${meal.value}`;
+                  const dayEntries = entriesByDayMeal.get(key) ?? [];
+                  return (
+                    <div key={meal.value}>
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{meal.label}</p>
+                      <div className="space-y-1">
+                        {dayEntries.map((e) => (
+                          <div key={e.id} className="flex items-center justify-between gap-1 rounded bg-teal-50 px-2 py-1">
+                            <span className="text-sm text-teal-800">{e.title}</span>
+                            <form action={deleteMealPlanEntry}>
+                              <input type="hidden" name="id" value={e.id} />
+                              <button className="text-teal-400 hover:text-red-500">✕</button>
+                            </form>
+                          </div>
+                        ))}
+                        <AddMealEntry date={dateStr} mealType={meal.value} recipes={recipes ?? []} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto sm:block">
         <div className="grid min-w-[820px] grid-cols-[90px_repeat(7,1fr)] gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 text-xs">
           <div className="bg-slate-50 p-2" />
           {days.map((day) => (
