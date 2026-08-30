@@ -126,145 +126,151 @@ export default async function DashboardPage() {
       <InboxCard items={inboxItems ?? []} />
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-lg">🛒</span>
-          <div>
-            <p className="text-xs font-medium uppercase text-slate-400">Groceries to buy</p>
-            <p className="text-2xl font-semibold text-slate-900">{groceryCount ?? 0}</p>
-          </div>
-        </Card>
-        <Card className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-lg">🧹</span>
-          <div>
-            <p className="text-xs font-medium uppercase text-slate-400">Open chores</p>
-            <p className="text-2xl font-semibold text-slate-900">{openChores?.length ?? 0}</p>
-          </div>
-        </Card>
-        <Card className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-lg">📉</span>
-          <div>
-            <p className="text-xs font-medium uppercase text-slate-400">Total debt</p>
-            <p className="text-2xl font-semibold text-slate-900">{currency(totalDebt)}</p>
-          </div>
-        </Card>
+        <Link href="/groceries">
+          <Card className="flex items-center gap-3 transition hover:border-teal-300 hover:shadow-md">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-100 text-lg">🛒</span>
+            <div>
+              <p className="text-xs font-medium uppercase text-slate-400">Groceries to buy</p>
+              <p className="text-2xl font-semibold text-slate-900">{groceryCount ?? 0}</p>
+            </div>
+          </Card>
+        </Link>
+        <Link href="/chores">
+          <Card className="flex items-center gap-3 transition hover:border-teal-300 hover:shadow-md">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-lg">🧹</span>
+            <div>
+              <p className="text-xs font-medium uppercase text-slate-400">Open chores</p>
+              <p className="text-2xl font-semibold text-slate-900">{openChores?.length ?? 0}</p>
+            </div>
+          </Card>
+        </Link>
+        <Link href="/debts">
+          <Card className="flex items-center gap-3 transition hover:border-teal-300 hover:shadow-md">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-lg">📉</span>
+            <div>
+              <p className="text-xs font-medium uppercase text-slate-400">Total debt</p>
+              <p className="text-2xl font-semibold text-slate-900">{currency(totalDebt)}</p>
+            </div>
+          </Card>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">Upcoming this week</h2>
-            <Link href="/calendar" className="text-xs text-teal-600 hover:underline">
-              View calendar
-            </Link>
-          </div>
-          {!upcomingEvents?.length ? (
-            <p className="text-sm text-slate-400">Nothing on the calendar this week.</p>
-          ) : (
-            <ul className="space-y-2">
-              {upcomingEvents.map((e) => (
-                <li key={e.id} className="flex items-center gap-2 text-sm">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
-                  <span className="text-slate-400">
-                    {format(wallClockDate(e.start_at), e.all_day ? "EEE, MMM d" : "EEE, MMM d 'at' h:mma")}
-                  </span>
-                  <span className="text-slate-900">{e.title}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        <Link href="/calendar">
+          <Card className="h-full transition hover:border-teal-300 hover:shadow-md">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700">Upcoming this week</h2>
+              <span className="text-xs text-teal-600">View calendar →</span>
+            </div>
+            {!upcomingEvents?.length ? (
+              <p className="text-sm text-slate-400">Nothing on the calendar this week.</p>
+            ) : (
+              <ul className="space-y-2">
+                {upcomingEvents.map((e) => (
+                  <li key={e.id} className="flex items-center gap-2 text-sm">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
+                    <span className="text-slate-400">
+                      {format(wallClockDate(e.start_at), e.all_day ? "EEE, MMM d" : "EEE, MMM d 'at' h:mma")}
+                    </span>
+                    <span className="text-slate-900">{e.title}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </Link>
 
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">Open chores</h2>
-            <Link href="/chores" className="text-xs text-teal-600 hover:underline">
-              View chores
-            </Link>
-          </div>
-          {!openChores?.length ? (
-            <p className="text-sm text-slate-400">All chores done. 🎉</p>
-          ) : (
-            <ul className="space-y-2">
-              {openChores.map((c) => (
-                <li key={c.id} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-900">{c.title}</span>
-                  <span className="text-slate-400">{c.assigned_to}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        <Link href="/chores">
+          <Card className="h-full transition hover:border-teal-300 hover:shadow-md">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700">Open chores</h2>
+              <span className="text-xs text-teal-600">View chores →</span>
+            </div>
+            {!openChores?.length ? (
+              <p className="text-sm text-slate-400">All chores done. 🎉</p>
+            ) : (
+              <ul className="space-y-2">
+                {openChores.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-900">{c.title}</span>
+                    <span className="text-slate-400">{c.assigned_to}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </Link>
 
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">This pay period</h2>
-            <Link href="/budget" className="text-xs text-teal-600 hover:underline">
-              View budget
-            </Link>
-          </div>
-          <p className="mb-3 text-xs text-slate-400">
-            {format(periodStartDate, "MMM d")} – {format(periodEndDate, "MMM d")}
-          </p>
-          <div className="mb-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-            <span className="text-sm text-slate-500">Remaining</span>
-            <span className={`text-lg font-semibold ${remaining < 0 ? "text-red-600" : "text-slate-900"}`}>
-              {currency(remaining)}
-            </span>
-          </div>
-          {!unpaidBillsThisPeriod.length ? (
-            <p className="text-sm text-slate-400">Nothing left to pay this period. 🎉</p>
-          ) : (
-            <ul className="space-y-2">
-              {unpaidBillsThisPeriod.slice(0, 4).map((b) => (
-                <li key={b.id} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-900">{b.name}</span>
-                  <span className="text-slate-400">
-                    {currency(Number(b.amount))} · due {format(b.occurrence!, "MMM d")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        <Link href="/budget">
+          <Card className="h-full transition hover:border-teal-300 hover:shadow-md">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700">This pay period</h2>
+              <span className="text-xs text-teal-600">View budget →</span>
+            </div>
+            <p className="mb-3 text-xs text-slate-400">
+              {format(periodStartDate, "MMM d")} – {format(periodEndDate, "MMM d")}
+            </p>
+            <div className="mb-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+              <span className="text-sm text-slate-500">Remaining</span>
+              <span className={`text-lg font-semibold ${remaining < 0 ? "text-red-600" : "text-slate-900"}`}>
+                {currency(remaining)}
+              </span>
+            </div>
+            {!unpaidBillsThisPeriod.length ? (
+              <p className="text-sm text-slate-400">Nothing left to pay this period. 🎉</p>
+            ) : (
+              <ul className="space-y-2">
+                {unpaidBillsThisPeriod.slice(0, 4).map((b) => (
+                  <li key={b.id} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-900">{b.name}</span>
+                    <span className="text-slate-400">
+                      {currency(Number(b.amount))} · due {format(b.occurrence!, "MMM d")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </Link>
 
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">Round-Up</h2>
-            <Link href="/roundup" className="text-xs text-teal-600 hover:underline">
-              View round-up
-            </Link>
-          </div>
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm text-slate-500">{focusDebt ? `Toward ${focusDebt.name}` : "No focus debt set"}</span>
-            <span className="text-sm text-slate-500">
-              {currency(roundupAvailable)} / {currency(roundupThreshold)}
-            </span>
-          </div>
-          <div className="h-3 w-full rounded-full bg-slate-100">
-            <div className="h-3 rounded-full bg-yellow-400" style={{ width: `${roundupPct}%` }} />
-          </div>
-        </Card>
+        <Link href="/roundup">
+          <Card className="h-full transition hover:border-teal-300 hover:shadow-md">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700">Round-Up</h2>
+              <span className="text-xs text-teal-600">View round-up →</span>
+            </div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm text-slate-500">{focusDebt ? `Toward ${focusDebt.name}` : "No focus debt set"}</span>
+              <span className="text-sm text-slate-500">
+                {currency(roundupAvailable)} / {currency(roundupThreshold)}
+              </span>
+            </div>
+            <div className="h-3 w-full rounded-full bg-slate-100">
+              <div className="h-3 rounded-full bg-yellow-400" style={{ width: `${roundupPct}%` }} />
+            </div>
+          </Card>
+        </Link>
 
-        <Card className="lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">Overdue maintenance</h2>
-            <Link href="/maintenance" className="text-xs text-teal-600 hover:underline">
-              View maintenance
-            </Link>
-          </div>
-          {!overdueMaintenance?.length ? (
-            <p className="text-sm text-slate-400">Nothing overdue.</p>
-          ) : (
-            <ul className="space-y-2">
-              {overdueMaintenance.map((t) => (
-                <li key={t.id} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-900">{t.title}</span>
-                  <span className="font-medium text-red-600">since {t.next_due_at}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        <Link href="/maintenance" className="lg:col-span-2">
+          <Card className="h-full transition hover:border-teal-300 hover:shadow-md">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700">Overdue maintenance</h2>
+              <span className="text-xs text-teal-600">View maintenance →</span>
+            </div>
+            {!overdueMaintenance?.length ? (
+              <p className="text-sm text-slate-400">Nothing overdue.</p>
+            ) : (
+              <ul className="space-y-2">
+                {overdueMaintenance.map((t) => (
+                  <li key={t.id} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-900">{t.title}</span>
+                    <span className="font-medium text-red-600">since {t.next_due_at}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </Link>
       </div>
     </div>
   );

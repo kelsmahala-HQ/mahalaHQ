@@ -57,3 +57,12 @@ export function quantityMultiplier(quantity: string | null | undefined): number 
   if (!quantity) return 1;
   return parseQuantity(quantity)?.amount ?? 1;
 }
+
+/** Recipe ingredient lists conventionally write prep instructions after the first comma, e.g.
+ *  "green cabbage, roughly chopped" or "onion, diced" -- fine for reading a recipe, but nobody
+ *  needs "roughly chopped" written on their grocery list. Strips it for that purpose only;
+ *  doesn't touch how the ingredient is stored/shown on the recipe itself. */
+export function groceryNameFromIngredient(name: string): string {
+  const commaIndex = name.indexOf(",");
+  return (commaIndex === -1 ? name : name.slice(0, commaIndex)).trim();
+}

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
-import { parseQuantity } from "@/lib/quantity";
+import { groceryNameFromIngredient, parseQuantity } from "@/lib/quantity";
 
 export async function addMealPlanEntry(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
@@ -50,8 +50,9 @@ export async function deleteMealPlanEntry(formData: FormData) {
 function combineIngredients(items: { name: string; quantity: string | null }[]): { name: string; quantity: string | null }[] {
   const groups = new Map<string, { displayName: string; quantities: string[] }>();
   for (const item of items) {
-    const key = item.name.trim().toLowerCase();
-    if (!groups.has(key)) groups.set(key, { displayName: item.name.trim(), quantities: [] });
+    const cleanName = groceryNameFromIngredient(item.name);
+    const key = cleanName.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { displayName: cleanName, quantities: [] });
     if (item.quantity?.trim()) groups.get(key)!.quantities.push(item.quantity.trim());
   }
 
