@@ -44,31 +44,28 @@ export async function deleteMealPlanEntry(formData: FormData) {
   revalidatePath("/meals");
 }
 
-/** Combines same-named ingredients into one line, adding up quantities when the units match
- *  (e.g. "1 onion" + "1 onion" -> "2 onion"). When units differ or a quantity isn't a plain
- *  number, the quantities are listed together instead of guessed at (e.g. "2 cups + 1 tbsp"). */
+/** A recipe's measured amount ("1/2 cup", "3 lbs") doesn't map to how many of a thing to buy,
+ *  so this converts it to a plain shopping count instead: "1/2 cup salsa" -> 1 (one container),
+ *  "2 onions" -> 2, "to taste"/blank -> 1 (it's still on the list, so grab one). */
+function toShoppingCount(quantity: string | null): number {
+  if (!quantity) return 1;
+  const parsed = parseQuantity(quantity);
+  if (!parsed) return 1;
+  return Math.max(1, Math.ceil(parsed.amount));
+}
+
+/** Combines same-named ingredients into one line with a simple count (e.g. two recipes each
+ *  needing "1 onion" -> "2"), not a recipe-style measurement. */
 function combineIngredients(items: { name: string; quantity: string | null }[]): { name: string; quantity: string | null }[] {
-  const groups = new Map<string, { displayName: string; quantities: string[] }>();
+  const groups = new Map<string, { displayName: string; count: number }>();
   for (const item of items) {
     const cleanName = groceryNameFromIngredient(item.name);
     const key = cleanName.toLowerCase();
-    if (!groups.has(key)) groups.set(key, { displayName: cleanName, quantities: [] });
-    if (item.quantity?.trim()) groups.get(key)!.quantities.push(item.quantity.trim());
+    if (!groups.has(key)) groups.set(key, { displayName: cleanName, count: 0 });
+    groups.get(key)!.count += toShoppingCount(item.quantity);
   }
 
-  return Array.from(groups.values()).map(({ displayName, quantities }) => {
-    if (!quantities.length) return { name: displayName, quantity: null };
-    if (quantities.length === 1) return { name: displayName, quantity: quantities[0] };
-
-    const parsed = quantities.map(parseQuantity);
-    const allParsed = parsed.every((p): p is { amount: number; unit: string } => p !== null);
-    const sameUnit = allParsed && parsed.every((p) => p!.unit.toLowerCase() === parsed[0]!.unit.toLowerCase());
-    if (allParsed && sameUnit) {
-      const total = parsed.reduce((sum, p) => sum + p!.amount, 0);
-      return { name: displayName, quantity: parsed[0]!.unit ? `${total} ${parsed[0]!.unit}` : String(total) };
-    }
-    return { name: displayName, quantity: quantities.join(" + ") };
-  });
+  return Array.from(groups.values()).map(({ displayName, count }) => ({ name: displayName, quantity: String(count) }));
 }
 
 /** Pulls every recipe-based meal planned for the given week into Groceries in one batch --
