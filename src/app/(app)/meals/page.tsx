@@ -61,9 +61,10 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
         </Link>
       </div>
 
-      {/* Mobile: one card per day, meal types stacked -- the 7-column grid below needs real
-          width to be usable, so it's desktop/tablet only. */}
-      <div className="space-y-4 sm:hidden">
+      {/* Stacked cards below xl: the 7-column grid needs ~820px of its own plus room for the
+          sidebar, so it doesn't actually fit until a fairly wide window -- sm: left a dead zone
+          (roughly 640-1100px) where the grid rendered wider than the screen and got clipped. */}
+      <div className="space-y-4 xl:hidden">
         {days.map((day) => {
           const dateStr = format(day, "yyyy-MM-dd");
           return (
@@ -97,7 +98,7 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
         })}
       </div>
 
-      <div className="hidden overflow-x-auto sm:block">
+      <div className="hidden overflow-x-auto xl:block">
         <div className="grid min-w-[820px] grid-cols-[90px_repeat(7,1fr)] gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 text-xs">
           <div className="bg-slate-50 p-2" />
           {days.map((day) => (
