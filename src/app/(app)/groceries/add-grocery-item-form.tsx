@@ -12,13 +12,27 @@ function currency(n: number) {
 type PriceHistoryEntry = { display_name: string; last_price: number };
 
 export default function AddGroceryItemForm({ priceHistory }: { priceHistory: PriceHistoryEntry[] }) {
+  const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  async function handleNameBlur(e: React.FocusEvent<HTMLInputElement>) {
-    const name = e.target.value.trim();
-    if (!name || price) return; // don't clobber a price she's already typed in
-    const remembered = await getRememberedPrice(name);
+  const query = name.trim().toLowerCase();
+  const matches =
+    query.length >= 2 ? priceHistory.filter((p) => p.display_name.toLowerCase().includes(query)).slice(0, 5) : [];
+
+  function pickSuggestion(entry: PriceHistoryEntry) {
+    setName(entry.display_name);
+    setPrice(String(entry.last_price));
+    setShowSuggestions(false);
+  }
+
+  async function handleNameBlur() {
+    // Give a click on a suggestion a moment to register before the list disappears.
+    setTimeout(() => setShowSuggestions(false), 150);
+    const trimmed = name.trim();
+    if (!trimmed || price) return; // don't clobber a price already picked/typed
+    const remembered = await getRememberedPrice(trimmed);
     if (remembered !== null) setPrice(String(remembered));
   }
 
@@ -29,25 +43,41 @@ export default function AddGroceryItemForm({ priceHistory }: { priceHistory: Pri
     await addItem(new FormData(form));
     setLoading(false);
     form.reset();
+    setName("");
     setPrice("");
   }
 
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_90px_110px_170px_auto]">
-      <input
-        name="name"
-        required
-        placeholder="Item (e.g. Milk)"
-        onBlur={handleNameBlur}
-        list="grocery-price-history"
-        title="Pick from the list if you've priced this before -- typing it slightly differently (e.g. 'Half & Half' vs 'Half and Half') won't match its remembered price"
-        className={inputClass}
-      />
-      <datalist id="grocery-price-history">
-        {priceHistory.map((p) => (
-          <option key={p.display_name} value={p.display_name} label={currency(p.last_price)} />
-        ))}
-      </datalist>
+      <div className="relative">
+        <input
+          name="name"
+          required
+          placeholder="Item (e.g. Milk)"
+          autoComplete="off"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={handleNameBlur}
+          className={inputClass}
+        />
+        {showSuggestions && !!matches.length && (
+          <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+            {matches.map((m) => (
+              <button
+                key={m.display_name}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()} // keep the blur from firing before the click
+                onClick={() => pickSuggestion(m)}
+                className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-teal-50"
+              >
+                <span className="text-slate-800">{m.display_name}</span>
+                <span className="text-slate-400">{currency(m.last_price)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <input name="quantity" placeholder="Qty" className={inputClass} />
       <input
         name="price"
