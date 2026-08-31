@@ -14,12 +14,19 @@ function currency(n: number) {
 export default async function GroceriesPage() {
   const household = await requireHousehold();
   const supabase = await createClient();
-  const { data: items } = await supabase
-    .from("grocery_items")
-    .select("*")
-    .eq("household_id", household.householdId)
-    .order("is_checked")
-    .order("created_at", { ascending: false });
+  const [{ data: items }, { data: priceHistory }] = await Promise.all([
+    supabase
+      .from("grocery_items")
+      .select("*")
+      .eq("household_id", household.householdId)
+      .order("is_checked")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("grocery_item_prices")
+      .select("display_name, last_price")
+      .eq("household_id", household.householdId)
+      .order("display_name"),
+  ]);
 
   const hasChecked = items?.some((i) => i.is_checked);
 
@@ -41,7 +48,7 @@ export default async function GroceriesPage() {
       <PageHeader title="Grocery List" subtitle="Shared list — anyone in the household can add or check items." />
 
       <Card className="mb-6">
-        <AddGroceryItemForm />
+        <AddGroceryItemForm priceHistory={priceHistory ?? []} />
       </Card>
 
       {!!items?.length && (

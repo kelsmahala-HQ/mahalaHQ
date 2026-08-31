@@ -5,7 +5,13 @@ import { buttonClass, inputClass } from "@/components/ui";
 import { GROCERY_CATEGORIES } from "@/lib/grocery-categories";
 import { addItem, getRememberedPrice } from "./actions";
 
-export default function AddGroceryItemForm() {
+function currency(n: number) {
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+type PriceHistoryEntry = { display_name: string; last_price: number };
+
+export default function AddGroceryItemForm({ priceHistory }: { priceHistory: PriceHistoryEntry[] }) {
   const [price, setPrice] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -28,7 +34,20 @@ export default function AddGroceryItemForm() {
 
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_90px_110px_170px_auto]">
-      <input name="name" required placeholder="Item (e.g. Milk)" onBlur={handleNameBlur} className={inputClass} />
+      <input
+        name="name"
+        required
+        placeholder="Item (e.g. Milk)"
+        onBlur={handleNameBlur}
+        list="grocery-price-history"
+        title="Pick from the list if you've priced this before -- typing it slightly differently (e.g. 'Half & Half' vs 'Half and Half') won't match its remembered price"
+        className={inputClass}
+      />
+      <datalist id="grocery-price-history">
+        {priceHistory.map((p) => (
+          <option key={p.display_name} value={p.display_name} label={currency(p.last_price)} />
+        ))}
+      </datalist>
       <input name="quantity" placeholder="Qty" className={inputClass} />
       <input
         name="price"

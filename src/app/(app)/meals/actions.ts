@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { groceryNameFromIngredient, parseQuantity } from "@/lib/quantity";
+import { consolidateGroceryIngredients } from "@/lib/grocery-ai";
 
 export async function addMealPlanEntry(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
@@ -97,14 +98,27 @@ export async function addWeekToGroceryList(formData: FormData): Promise<{ error:
   if (ingredientsError) return { error: ingredientsError.message };
   if (!ingredients?.length) return { error: "This week's recipes don't have any ingredients listed." };
 
-  const combined = combineIngredients(ingredients);
+  // AI consolidation catches real duplicates that differently-worded ingredients across
+  // recipes can't match on ("onion" / "yellow onion" / "onions"). Falls back to a plain
+  // exact-name merge if that's unavailable or fails, so the pull still works either way.
+  const aiConsolidated = await consolidateGroceryIngredients(ingredients);
+  const combined = aiConsolidated ?? combineIngredients(ingredients).map((i) => ({ ...i, category: "other" }));
+
+  // Prefill each item's price from what it cost last time, same as adding one by hand --
+  // otherwise a weekly pull would always start every price blank.
+  const { data: rememberedPrices } = await supabase
+    .from("grocery_item_prices")
+    .select("name_key, last_price")
+    .eq("household_id", household.householdId);
+  const priceByKey = new Map((rememberedPrices ?? []).map((p) => [p.name_key, p.last_price]));
 
   const { error: groceryError } = await supabase.from("grocery_items").insert(
     combined.map((ing) => ({
       household_id: household.householdId,
       name: ing.name,
       quantity: ing.quantity,
-      category: "other",
+      category: ing.category,
+      price: priceByKey.get(ing.name.trim().toLowerCase()) ?? null,
       added_by: household.userId,
     }))
   );
