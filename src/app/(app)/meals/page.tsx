@@ -114,13 +114,13 @@ export default async function MealsPage({ searchParams }: { searchParams: Promis
                 const key = `${dateStr}-${meal.value}`;
                 const dayEntries = entriesByDayMeal.get(key) ?? [];
                 return (
-                  <div key={key} className="min-h-16 space-y-1 bg-white p-1.5">
+                  <div key={key} className="min-h-24 min-w-0 space-y-1 bg-white p-1.5">
                     {dayEntries.map((e) => (
-                      <div key={e.id} className="flex items-center justify-between gap-1 rounded bg-teal-50 px-1.5 py-0.5">
-                        <span className="truncate text-teal-800">{e.title}</span>
+                      <div key={e.id} className="flex items-start justify-between gap-1 rounded bg-teal-50 px-1.5 py-1">
+                        <span className="break-words text-teal-800">{e.title}</span>
                         <form action={deleteMealPlanEntry}>
                           <input type="hidden" name="id" value={e.id} />
-                          <button className="text-teal-400 hover:text-red-500">✕</button>
+                          <button className="shrink-0 text-teal-400 hover:text-red-500">✕</button>
                         </form>
                       </div>
                     ))}
