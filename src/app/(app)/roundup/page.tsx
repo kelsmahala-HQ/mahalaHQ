@@ -35,7 +35,7 @@ export default async function RoundupPage() {
       supabase.from("roundup_payouts").select("amount").eq("household_id", household.householdId),
       admin
         .from("plaid_items")
-        .select("id, institution_name, created_at")
+        .select("id, institution_name, created_at, needs_reauth")
         .eq("household_id", household.householdId)
         .order("created_at"),
     ]);
@@ -102,13 +102,30 @@ export default async function RoundupPage() {
           <div className="space-y-2">
             {plaidItems.map((item) => (
               <div key={item.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                <span className="text-sm text-slate-900">{item.institution_name ?? "Bank account"}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-900">{item.institution_name ?? "Bank account"}</span>
+                  {item.needs_reauth && (
+                    <span
+                      title="This bank needs you to reconnect it -- syncing kept failing, probably because it needs you to log back in"
+                      className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                    >
+                      ⚠️ Needs reconnecting
+                    </span>
+                  )}
+                </div>
                 <form action={removePlaidItem}>
                   <input type="hidden" name="id" value={item.id} />
                   <button className={iconButtonClass}>Disconnect</button>
                 </form>
               </div>
             ))}
+            {plaidItems.some((item) => item.needs_reauth) && (
+              <p className="text-xs text-slate-400">
+                For anything marked &ldquo;Needs reconnecting,&rdquo; just click <strong>Connect a bank account</strong> below and
+                log into that same bank again — it&rsquo;ll automatically replace the broken connection instead of adding a
+                duplicate.
+              </p>
+            )}
             <PlaidLinkButton />
           </div>
         )}

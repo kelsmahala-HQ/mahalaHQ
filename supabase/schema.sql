@@ -598,8 +598,12 @@ create table if not exists plaid_items (
   access_token text not null, -- never selected/returned to the browser; server-side use only
   institution_name text,
   cursor text, -- pagination cursor for /transactions/sync
+  needs_reauth boolean not null default false, -- set when a sync call fails (e.g. bank needs re-login); surfaced in the UI
   created_at timestamptz not null default now()
 );
+
+-- Adds needs_reauth to plaid_items for installs that ran an earlier version of this script.
+alter table plaid_items add column if not exists needs_reauth boolean not null default false;
 
 -- One row per subscribed device/browser, for web push notifications. member_id is nullable so
 -- a subscription still works (and can be looked up by household) even if the member row is

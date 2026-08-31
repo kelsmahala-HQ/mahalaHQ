@@ -35,6 +35,25 @@ export async function exchangePublicToken(
   const admin = createAdminClient();
 
   try {
+    // Plaid's regular Link flow (the only one this app offers -- there's no "update mode" for
+    // repairing an existing item) always creates a brand-new Item, even when reconnecting the
+    // same real bank. Left alone, a broken connection you "reconnect" would just pile up as a
+    // second row for the same institution instead of replacing the broken one -- so remove any
+    // existing item for this institution first, the same way clicking Disconnect would.
+    const { data: existing } = await admin
+      .from("plaid_items")
+      .select("id, access_token")
+      .eq("household_id", household.householdId)
+      .eq("institution_name", institutionName);
+    for (const old of existing ?? []) {
+      try {
+        await client.itemRemove({ access_token: old.access_token });
+      } catch {
+        // Already broken/revoked on Plaid's side -- fine, we're replacing it anyway.
+      }
+      await admin.from("plaid_items").delete().eq("id", old.id);
+    }
+
     const response = await client.itemPublicTokenExchange({ public_token: publicToken });
     const accessToken = response.data.access_token;
 
@@ -102,35 +121,42 @@ export async function syncTransactions() {
   const multiplier = Number(settingsRow?.multiplier ?? 2);
 
   for (const item of items ?? []) {
-    let cursor: string | undefined = item.cursor ?? undefined;
-    let hasMore = true;
+    // One broken connection (e.g. the bank needs you to log back in) used to throw here and
+    // abort the whole sync before any *other* connected bank got a turn. Now it's caught,
+    // flagged for the UI, and the loop moves on to the rest.
+    try {
+      let cursor: string | undefined = item.cursor ?? undefined;
+      let hasMore = true;
 
-    while (hasMore) {
-      const response = await client.transactionsSync({
-        access_token: item.access_token,
-        cursor,
-      });
-
-      for (const txn of response.data.added) {
-        // Plaid convention: a positive amount is money leaving the account (a purchase).
-        if (txn.amount <= 0 || txn.pending) continue;
-
-        await admin.from("roundup_purchases").insert({
-          household_id: household.householdId,
-          amount: txn.amount,
-          round_up: calculateRoundUp(txn.amount, multiplier),
-          source: "plaid",
-          plaid_transaction_id: txn.transaction_id,
-          merchant_name: txn.merchant_name ?? txn.name,
-          purchased_at: txn.date,
+      while (hasMore) {
+        const response = await client.transactionsSync({
+          access_token: item.access_token,
+          cursor,
         });
+
+        for (const txn of response.data.added) {
+          // Plaid convention: a positive amount is money leaving the account (a purchase).
+          if (txn.amount <= 0 || txn.pending) continue;
+
+          await admin.from("roundup_purchases").insert({
+            household_id: household.householdId,
+            amount: txn.amount,
+            round_up: calculateRoundUp(txn.amount, multiplier),
+            source: "plaid",
+            plaid_transaction_id: txn.transaction_id,
+            merchant_name: txn.merchant_name ?? txn.name,
+            purchased_at: txn.date,
+          });
+        }
+
+        cursor = response.data.next_cursor;
+        hasMore = response.data.has_more;
       }
 
-      cursor = response.data.next_cursor;
-      hasMore = response.data.has_more;
+      await admin.from("plaid_items").update({ cursor, needs_reauth: false }).eq("id", item.id);
+    } catch {
+      await admin.from("plaid_items").update({ needs_reauth: true }).eq("id", item.id);
     }
-
-    await admin.from("plaid_items").update({ cursor }).eq("id", item.id);
   }
 
   await notifyIfThresholdReached(household.householdId, household.householdName);
