@@ -1,3 +1,4 @@
+import { addDays, format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
@@ -9,6 +10,17 @@ import AddRewardForm from "./add-reward-form";
 
 function frequencyLabel(frequency: string, daysOfWeek: number[] | null) {
   return daysOfWeekLabel(daysOfWeek) ?? frequency;
+}
+
+/** A short, friendly due-date status instead of a raw "due 2026-09-10" string -- "Due today"/
+ *  "Due tomorrow" read at a glance, everything else falls back to a plain "Due Sep 10". */
+function dueStatus(dueDate: string | null, todayStr: string): { text: string; tone: "overdue" | "today" | "later" } | null {
+  if (!dueDate) return null;
+  if (dueDate < todayStr) return { text: `Overdue since ${format(new Date(`${dueDate}T00:00:00`), "MMM d")}`, tone: "overdue" };
+  if (dueDate === todayStr) return { text: "Due today", tone: "today" };
+  const tomorrowStr = format(addDays(new Date(`${todayStr}T00:00:00`), 1), "yyyy-MM-dd");
+  if (dueDate === tomorrowStr) return { text: "Due tomorrow", tone: "later" };
+  return { text: `Due ${format(new Date(`${dueDate}T00:00:00`), "MMM d")}`, tone: "later" };
 }
 
 export default async function ChoresPage() {
@@ -52,6 +64,7 @@ export default async function ChoresPage() {
   ]);
   const { data: chores } = choresQuery;
   const memberNameById = new Map((members ?? []).map((m) => [m.id, m.display_name]));
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
@@ -100,7 +113,9 @@ export default async function ChoresPage() {
         <EmptyState message={isKid ? "Nothing assigned to you right now. 🎉" : "No chores yet — add one above."} />
       ) : (
         <div className="space-y-2">
-          {chores.map((chore) => (
+          {chores.map((chore) => {
+            const due = dueStatus(chore.due_date, todayStr);
+            return (
             <Card key={chore.id} className="flex items-center justify-between !p-4">
               <div>
                 <p className={`font-medium ${chore.status === "done" ? "text-slate-400 line-through" : "text-slate-900"}`}>
@@ -111,16 +126,25 @@ export default async function ChoresPage() {
                     </span>
                   )}
                 </p>
-                <p className="text-sm text-slate-500">
-                  {[
-                    !isKid ? chore.assigned_to : null,
-                    chore.frequency !== "once" ? frequencyLabel(chore.frequency, chore.days_of_week) : null,
-                    chore.due_date ? `due ${chore.due_date}` : null,
-                    chore.last_completed_at ? `last done ${new Date(chore.last_completed_at).toLocaleDateString()}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {!isKid && chore.assigned_to && <span className="text-sm text-slate-500">{chore.assigned_to}</span>}
+                  {chore.frequency !== "once" && (
+                    <span className="text-sm text-slate-400">{frequencyLabel(chore.frequency, chore.days_of_week)}</span>
+                  )}
+                  {due && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        due.tone === "overdue"
+                          ? "bg-red-100 text-red-700"
+                          : due.tone === "today"
+                            ? "bg-teal-100 text-teal-700"
+                            : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {due.text}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <form action={completeChore}>
@@ -138,7 +162,8 @@ export default async function ChoresPage() {
                 )}
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
