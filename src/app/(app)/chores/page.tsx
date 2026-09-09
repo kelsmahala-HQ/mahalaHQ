@@ -3,10 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
 import { daysOfWeekLabel } from "@/lib/weekdays";
-import { completeChore, deleteChore } from "./actions";
-import { approveRedemption, denyRedemption, deleteReward } from "./rewards-actions";
+import { deleteReward, approveRedemption, denyRedemption } from "./rewards-actions";
 import AddChoreForm from "./add-chore-form";
 import AddRewardForm from "./add-reward-form";
+import ChoreRow from "./chore-row";
 
 function frequencyLabel(frequency: string, daysOfWeek: number[] | null) {
   return daysOfWeekLabel(daysOfWeek) ?? frequency;
@@ -66,6 +66,16 @@ export default async function ChoresPage() {
   const memberNameById = new Map((members ?? []).map((m) => [m.id, m.display_name]));
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  const choreIds = (chores ?? []).map((c) => c.id);
+  const { data: assigneeRows } = choreIds.length
+    ? await supabase.from("chore_assignees").select("chore_id, member_id").in("chore_id", choreIds)
+    : { data: [] as { chore_id: string; member_id: string }[] };
+  const assigneesByChore = new Map<string, string[]>();
+  for (const row of assigneeRows ?? []) {
+    if (!assigneesByChore.has(row.chore_id)) assigneesByChore.set(row.chore_id, []);
+    assigneesByChore.get(row.chore_id)!.push(row.member_id);
+  }
+
   return (
     <div>
       <PageHeader
@@ -113,57 +123,18 @@ export default async function ChoresPage() {
         <EmptyState message={isKid ? "Nothing assigned to you right now. 🎉" : "No chores yet — add one above."} />
       ) : (
         <div className="space-y-2">
-          {chores.map((chore) => {
-            const due = dueStatus(chore.due_date, todayStr);
-            return (
-            <Card key={chore.id} className="flex items-center justify-between !p-4">
-              <div>
-                <p className={`font-medium ${chore.status === "done" ? "text-slate-400 line-through" : "text-slate-900"}`}>
-                  {chore.title}
-                  {chore.points > 0 && (
-                    <span className="ml-2 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-800">
-                      ⭐ {chore.points} pts
-                    </span>
-                  )}
-                </p>
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {!isKid && chore.assigned_to && <span className="text-sm text-slate-500">{chore.assigned_to}</span>}
-                  {chore.frequency !== "once" && (
-                    <span className="text-sm text-slate-400">{frequencyLabel(chore.frequency, chore.days_of_week)}</span>
-                  )}
-                  {due && (
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        due.tone === "overdue"
-                          ? "bg-red-100 text-red-700"
-                          : due.tone === "today"
-                            ? "bg-teal-100 text-teal-700"
-                            : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {due.text}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <form action={completeChore}>
-                  <input type="hidden" name="id" value={chore.id} />
-                  <input type="hidden" name="frequency" value={chore.frequency} />
-                  <button className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-bold text-white hover:bg-teal-600">
-                    {chore.status === "done" ? "Done! ✅" : "Mark done ✅"}
-                  </button>
-                </form>
-                {canManage && (
-                  <form action={deleteChore}>
-                    <input type="hidden" name="id" value={chore.id} />
-                    <button className={iconButtonClass}>Remove</button>
-                  </form>
-                )}
-              </div>
-            </Card>
-            );
-          })}
+          {chores.map((chore) => (
+            <ChoreRow
+              key={chore.id}
+              chore={chore}
+              due={dueStatus(chore.due_date, todayStr)}
+              isKid={isKid}
+              canManage={canManage}
+              members={members ?? []}
+              assignedMemberIds={assigneesByChore.get(chore.id) ?? (chore.assigned_member_id ? [chore.assigned_member_id] : [])}
+              frequencyLabel={chore.frequency !== "once" ? frequencyLabel(chore.frequency, chore.days_of_week) : null}
+            />
+          ))}
         </div>
       )}
 

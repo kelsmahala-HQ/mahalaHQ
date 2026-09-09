@@ -58,6 +58,57 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
   return { success: true };
 }
 
+export async function updateChore(formData: FormData): Promise<{ error: string } | { success: true }> {
+  const household = await requireHousehold();
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+  const title = (formData.get("title") as string)?.trim();
+  if (!id) return { error: "Missing chore." };
+  if (!title) return { error: "Name the chore." };
+
+  const assignedMemberIds = (formData.getAll("assigned_member_id") as string[]).filter(Boolean);
+  const frequency = (formData.get("frequency") as string) || "once";
+  const daysOfWeek = (formData.getAll("days_of_week") as string[]).map(Number).filter((n) => !Number.isNaN(n));
+
+  let assignedNames: string[] = [];
+  if (assignedMemberIds.length) {
+    const { data: memberRows } = await supabase.from("household_members").select("id, display_name").in("id", assignedMemberIds);
+    assignedNames = assignedMemberIds
+      .map((memberId) => memberRows?.find((m) => m.id === memberId)?.display_name)
+      .filter((n): n is string => !!n);
+  }
+
+  const { error } = await supabase
+    .from("chores")
+    .update({
+      title,
+      assigned_member_id: assignedMemberIds[0] ?? null,
+      assigned_to: assignedNames.join(", ") || null,
+      frequency,
+      days_of_week: frequency === "weekly" && daysOfWeek.length ? daysOfWeek : null,
+      points: Number(formData.get("points") || 0),
+      due_date: (formData.get("due_date") as string) || null,
+    })
+    .eq("id", id)
+    .eq("household_id", household.householdId);
+
+  if (error) return { error: error.message };
+
+  const { error: deleteError } = await supabase.from("chore_assignees").delete().eq("chore_id", id);
+  if (deleteError) return { error: deleteError.message };
+
+  if (assignedMemberIds.length) {
+    const { error: assigneeError } = await supabase
+      .from("chore_assignees")
+      .insert(assignedMemberIds.map((memberId) => ({ household_id: household.householdId, chore_id: id, member_id: memberId })));
+    if (assigneeError) return { error: assigneeError.message };
+  }
+
+  revalidatePath("/chores");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
 function advanceDueDate(dateStr: string, frequency: string, daysOfWeek?: number[] | null): string {
   const d = new Date(`${dateStr}T00:00:00`);
 
