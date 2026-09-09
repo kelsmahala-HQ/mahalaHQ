@@ -252,8 +252,18 @@ create table if not exists rewards (
   household_id uuid not null references households(id) on delete cascade,
   name text not null,
   cost integer not null check (cost > 0),
+  audience text not null default 'kid' check (audience in ('kid', 'adult')), -- 'adult' rewards never show to kid/sitter accounts
   created_at timestamptz not null default now()
 );
+
+-- Adds audience to rewards for installs that ran an earlier version of this script.
+alter table rewards add column if not exists audience text not null default 'kid';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'rewards_audience_check') then
+    alter table rewards add constraint rewards_audience_check check (audience in ('kid', 'adult'));
+  end if;
+end $$;
 
 -- A kid's request to redeem a reward. reward_name/cost are snapshotted at request time so
 -- editing or removing a reward later doesn't change the meaning of past redemptions.

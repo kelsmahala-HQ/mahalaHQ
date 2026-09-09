@@ -23,7 +23,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
           .order("due_date", { nullsFirst: false })
       : Promise.resolve({ data: [] }),
     supabase.from("chore_completions").select("points").eq("member_id", household.memberId),
-    supabase.from("rewards").select("*").eq("household_id", household.householdId).order("cost"),
+    supabase.from("rewards").select("*").eq("household_id", household.householdId).eq("audience", "kid").order("cost"),
     supabase.from("reward_redemptions").select("*").eq("member_id", household.memberId).order("requested_at", { ascending: false }),
   ]);
 

@@ -13,10 +13,13 @@ export async function addReward(formData: FormData): Promise<{ error: string } |
   const household = await requireAdult();
   const supabase = await createClient();
 
+  const audience = (formData.get("audience") as string) === "adult" ? "adult" : "kid";
+
   const { error } = await supabase.from("rewards").insert({
     household_id: household.householdId,
     name: formData.get("name") as string,
     cost: Number(formData.get("cost")),
+    audience,
   });
 
   if (error) return { error: error.message };

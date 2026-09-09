@@ -7,6 +7,7 @@ import { deleteReward, approveRedemption, denyRedemption } from "./rewards-actio
 import AddChoreForm from "./add-chore-form";
 import AddRewardForm from "./add-reward-form";
 import ChoreRow from "./chore-row";
+import RedeemButton from "./redeem-button";
 
 function frequencyLabel(frequency: string, daysOfWeek: number[] | null) {
   return daysOfWeekLabel(daysOfWeek) ?? frequency;
@@ -65,6 +66,24 @@ export default async function ChoresPage() {
   const { data: chores } = choresQuery;
   const memberNameById = new Map((members ?? []).map((m) => [m.id, m.display_name]));
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  const kidRewards = (rewards ?? []).filter((r) => r.audience !== "adult");
+  const adultRewards = (rewards ?? []).filter((r) => r.audience === "adult");
+  const ownPendingRewardIds = new Set(
+    (pendingRedemptions ?? []).filter((r) => r.member_id === household.memberId).map((r) => r.reward_id)
+  );
+
+  // Your own points, private to you -- same balance math as the kid dashboard, just scoped to
+  // the signed-in admin/adult instead of a kid. Only computed when it'll actually be shown.
+  const [{ data: ownCompletions }, { data: ownRedemptions }] = canManage
+    ? await Promise.all([
+        supabase.from("chore_completions").select("points").eq("member_id", household.memberId),
+        supabase.from("reward_redemptions").select("cost").eq("member_id", household.memberId).in("status", ["pending", "approved"]),
+      ])
+    : [{ data: [] as { points: number }[] }, { data: [] as { cost: number }[] }];
+  const ownEarned = (ownCompletions ?? []).reduce((sum, c) => sum + c.points, 0);
+  const ownReserved = (ownRedemptions ?? []).reduce((sum, r) => sum + r.cost, 0);
+  const ownBalance = ownEarned - ownReserved;
 
   const choreIds = (chores ?? []).map((c) => c.id);
   const { data: assigneeRows } = choreIds.length
@@ -140,18 +159,58 @@ export default async function ChoresPage() {
 
       {canManage && (
         <Card className="mt-8">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">🎁 Rewards</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">🎁 Kid Rewards</h2>
           <p className="mb-3 text-xs text-slate-400">
             What kids can redeem points for — shows up on their dashboard once they&rsquo;ve earned enough.
           </p>
-          <AddRewardForm />
-          {!!rewards?.length && (
+          <AddRewardForm audience="kid" />
+          {!!kidRewards.length && (
             <div className="mt-4 space-y-1">
-              {rewards.map((r) => (
+              {kidRewards.map((r) => (
                 <div key={r.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                   <span className="text-sm text-slate-900">{r.name}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-slate-500">⭐ {r.cost}</span>
+                    <form action={deleteReward}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <button className={iconButtonClass}>Remove</button>
+                    </form>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {canManage && (
+        <Card className="mt-8 !bg-indigo-50">
+          <div className="mb-1 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">🔒 Adult Rewards — Private</h2>
+            <span className="text-sm font-medium text-indigo-700">Your points: ⭐ {ownBalance}</span>
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Just for admins/adults (you and Luke) — kid and sitter accounts never see this section at all.
+          </p>
+          <AddRewardForm audience="adult" />
+          {!!adultRewards.length && (
+            <div className="mt-4 space-y-2">
+              {adultRewards.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
+                  <div>
+                    <span className="text-sm text-slate-900">{r.name}</span>
+                    <span className="ml-2 text-xs text-slate-400">⭐ {r.cost}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-32">
+                      {ownPendingRewardIds.has(r.id) ? (
+                        <button disabled className="w-full rounded-xl bg-slate-100 py-2 text-xs font-bold text-slate-400">
+                          Waiting for approval
+                        </button>
+                      ) : (
+                        <RedeemButton rewardId={r.id} canAfford={ownBalance >= r.cost} />
+                      )}
+                    </div>
                     <form action={deleteReward}>
                       <input type="hidden" name="id" value={r.id} />
                       <button className={iconButtonClass}>Remove</button>

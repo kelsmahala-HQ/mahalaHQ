@@ -4,7 +4,7 @@ import { useState } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
 import { addReward } from "./rewards-actions";
 
-export default function AddRewardForm() {
+export default function AddRewardForm({ audience = "kid" }: { audience?: "kid" | "adult" }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -23,9 +23,15 @@ export default function AddRewardForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="audience" value={audience} />
       <div className="flex-1">
         <label className="mb-1 block text-xs font-medium text-slate-500">Reward</label>
-        <input name="name" required placeholder="e.g. 15 min extra screen time" className={inputClass} />
+        <input
+          name="name"
+          required
+          placeholder={audience === "adult" ? "e.g. Date night, sleep in Saturday" : "e.g. 15 min extra screen time"}
+          className={inputClass}
+        />
       </div>
       <div className="w-28">
         <label className="mb-1 block text-xs font-medium text-slate-500">Cost</label>
