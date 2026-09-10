@@ -130,7 +130,7 @@ export default async function ChoresPage() {
       <ChoreRow
         key={chore.id}
         chore={chore}
-        due={dueStatus(chore.due_date, todayStr)}
+        due={chore.status === "done" ? null : dueStatus(chore.due_date, todayStr)}
         isKid={isKid}
         canManage={canManage}
         members={members ?? []}
