@@ -57,3 +57,22 @@ export async function sendPushToHousehold(supabase: SupabaseClient, householdId:
   const { data } = await supabase.from("push_subscriptions").select("id, endpoint, p256dh, auth").eq("household_id", householdId);
   await sendPushToSubscriptions(supabase, data ?? [], payload);
 }
+
+/** Sends to every admin/adult in a household -- for things a grown-up needs to act on
+ *  (a reward request, a kid's chore points waiting for approval). */
+export async function sendPushToManagers(
+  supabase: SupabaseClient,
+  householdId: string,
+  payload: { title: string; body: string; url?: string },
+  opts?: { exceptMemberId?: string }
+) {
+  const { data: managers } = await supabase
+    .from("household_members")
+    .select("id")
+    .eq("household_id", householdId)
+    .in("role", ["admin", "adult"]);
+  const ids = (managers ?? []).map((m) => m.id).filter((id) => id !== opts?.exceptMemberId);
+  if (!ids.length) return;
+  const { data } = await supabase.from("push_subscriptions").select("id, endpoint, p256dh, auth").in("member_id", ids);
+  await sendPushToSubscriptions(supabase, data ?? [], payload);
+}

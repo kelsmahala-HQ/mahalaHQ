@@ -1,12 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult, requireHousehold } from "@/lib/household";
+import { sendPushToManagers, sendPushToMember } from "@/lib/push";
 
 function revalidateRewards() {
   revalidatePath("/chores");
   revalidatePath("/dashboard");
+}
+
+/** Adults manage rewards on /chores; kids see theirs on /dashboard. */
+async function landingForMember(supabase: SupabaseClient, memberId: string): Promise<string> {
+  const { data } = await supabase.from("household_members").select("role").eq("id", memberId).single();
+  return data?.role === "admin" || data?.role === "adult" ? "/chores" : "/dashboard";
 }
 
 export async function addReward(formData: FormData): Promise<{ error: string } | { success: true }> {
@@ -64,6 +72,17 @@ export async function requestRedemption(formData: FormData): Promise<{ error: st
 
   if (error) return { error: error.message };
 
+  await sendPushToManagers(
+    supabase,
+    household.householdId,
+    {
+      title: "🎁 Reward request",
+      body: `${household.displayName} wants ${reward.name} (⭐ ${reward.cost})`,
+      url: "/chores",
+    },
+    { exceptMemberId: household.memberId }
+  );
+
   revalidateRewards();
   return { success: true };
 }
@@ -71,17 +90,51 @@ export async function requestRedemption(formData: FormData): Promise<{ error: st
 export async function approveRedemption(formData: FormData) {
   const household = await requireAdult();
   const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  const { data: redemption } = await supabase
+    .from("reward_redemptions")
+    .select("member_id, reward_name")
+    .eq("id", id)
+    .single();
+
   await supabase
     .from("reward_redemptions")
     .update({ status: "approved", decided_at: new Date().toISOString(), decided_by: household.userId })
-    .eq("id", formData.get("id") as string);
+    .eq("id", id);
+
+  if (redemption && redemption.member_id !== household.memberId) {
+    await sendPushToMember(supabase, redemption.member_id, {
+      title: "🎉 Reward approved!",
+      body: `${redemption.reward_name} — all yours.`,
+      url: await landingForMember(supabase, redemption.member_id),
+    });
+  }
+
   revalidateRewards();
 }
 
 /** Denying just removes the request -- frees up the reserved points, no need to keep a record. */
 export async function denyRedemption(formData: FormData) {
-  await requireAdult();
+  const household = await requireAdult();
   const supabase = await createClient();
-  await supabase.from("reward_redemptions").delete().eq("id", formData.get("id") as string);
+  const id = formData.get("id") as string;
+
+  const { data: redemption } = await supabase
+    .from("reward_redemptions")
+    .select("member_id, reward_name")
+    .eq("id", id)
+    .single();
+
+  await supabase.from("reward_redemptions").delete().eq("id", id);
+
+  if (redemption && redemption.member_id !== household.memberId) {
+    await sendPushToMember(supabase, redemption.member_id, {
+      title: "Reward request declined",
+      body: `${redemption.reward_name} wasn't approved this time — your points are back.`,
+      url: await landingForMember(supabase, redemption.member_id),
+    });
+  }
+
   revalidateRewards();
 }

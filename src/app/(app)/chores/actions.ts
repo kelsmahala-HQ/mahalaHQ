@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult, requireHousehold } from "@/lib/household";
-import { sendPushToMember } from "@/lib/push";
+import { sendPushToManagers, sendPushToMember } from "@/lib/push";
 import { todayEasternDateStr } from "@/lib/chore-reminders";
 
 export async function addChore(formData: FormData): Promise<{ error: string } | { success: true }> {
@@ -267,6 +267,20 @@ export async function completeChore(formData: FormData) {
         }))
       );
       if (error) throw new Error(error.message);
+
+      // A kid's points wait for a grown-up -- let the grown-ups know there's something to approve.
+      if (recipients.some((r) => !r.autoApprove)) {
+        await sendPushToManagers(
+          supabase,
+          household.householdId,
+          {
+            title: "✅ Chore to approve",
+            body: `${household.displayName} did ${chore.title} — ⭐ ${chore.points} waiting for your approval`,
+            url: "/chores",
+          },
+          { exceptMemberId: household.memberId }
+        );
+      }
     }
   }
 
@@ -317,12 +331,37 @@ export async function makeChoreAvailable(formData: FormData) {
   const supabase = await createClient();
   const id = formData.get("id") as string;
 
+  const { data: chore } = await supabase
+    .from("chores")
+    .select("title")
+    .eq("id", id)
+    .eq("household_id", household.householdId)
+    .single();
+
   const { error } = await supabase
     .from("chores")
     .update({ status: "open", due_date: todayEasternDateStr() })
     .eq("id", id)
     .eq("household_id", household.householdId);
   if (error) throw new Error(error.message);
+
+  // Tell the people who might do it that it's back on the board.
+  const [{ data: assignees }, { data: eligible }] = await Promise.all([
+    supabase.from("chore_assignees").select("member_id").eq("chore_id", id),
+    supabase.from("chore_eligibility").select("member_id").eq("chore_id", id),
+  ]);
+  const notify = new Set(
+    [...(assignees ?? []), ...(eligible ?? [])].map((r) => r.member_id).filter((m) => m !== household.memberId)
+  );
+  await Promise.all(
+    [...notify].map((memberId) =>
+      sendPushToMember(supabase, memberId, {
+        title: "🧹 Chore available again",
+        body: `${chore?.title ?? "A chore"} is ready to be done`,
+        url: "/chores",
+      })
+    )
+  );
 
   revalidatePath("/chores");
   revalidatePath("/dashboard");
@@ -331,11 +370,29 @@ export async function makeChoreAvailable(formData: FormData) {
 export async function approveChoreCompletion(formData: FormData) {
   const household = await requireAdult();
   const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  const { data: completion } = await supabase
+    .from("chore_completions")
+    .select("member_id, chore_title, points")
+    .eq("id", id)
+    .eq("household_id", household.householdId)
+    .single();
+
   await supabase
     .from("chore_completions")
     .update({ approval_status: "approved", decided_at: new Date().toISOString(), decided_by: household.userId })
-    .eq("id", formData.get("id") as string)
+    .eq("id", id)
     .eq("household_id", household.householdId);
+
+  if (completion && completion.member_id !== household.memberId) {
+    await sendPushToMember(supabase, completion.member_id, {
+      title: "⭐ Points approved!",
+      body: `${completion.points} points for ${completion.chore_title ?? "your chore"} — they're in your balance.`,
+      url: "/dashboard",
+    });
+  }
+
   revalidatePath("/chores");
   revalidatePath("/dashboard");
 }
@@ -344,11 +401,29 @@ export async function approveChoreCompletion(formData: FormData) {
 export async function rejectChoreCompletion(formData: FormData) {
   const household = await requireAdult();
   const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  const { data: completion } = await supabase
+    .from("chore_completions")
+    .select("member_id, chore_title")
+    .eq("id", id)
+    .eq("household_id", household.householdId)
+    .single();
+
   await supabase
     .from("chore_completions")
     .update({ approval_status: "rejected", decided_at: new Date().toISOString(), decided_by: household.userId })
-    .eq("id", formData.get("id") as string)
+    .eq("id", id)
     .eq("household_id", household.householdId);
+
+  if (completion && completion.member_id !== household.memberId) {
+    await sendPushToMember(supabase, completion.member_id, {
+      title: "Chore points not approved",
+      body: `${completion.chore_title ?? "That chore"} didn't get the points this time.`,
+      url: "/dashboard",
+    });
+  }
+
   revalidatePath("/chores");
   revalidatePath("/dashboard");
 }
@@ -356,12 +431,37 @@ export async function rejectChoreCompletion(formData: FormData) {
 export async function approveAllChoreCompletions() {
   const household = await requireAdult();
   const supabase = await createClient();
+
+  const { data: pending } = await supabase
+    .from("chore_completions")
+    .select("member_id, points")
+    .eq("household_id", household.householdId)
+    .eq("approval_status", "pending")
+    .eq("kind", "completed");
+
   await supabase
     .from("chore_completions")
     .update({ approval_status: "approved", decided_at: new Date().toISOString(), decided_by: household.userId })
     .eq("household_id", household.householdId)
     .eq("approval_status", "pending")
     .eq("kind", "completed");
+
+  // One push per affected person with their newly-approved total.
+  const totals = new Map<string, number>();
+  for (const row of pending ?? []) {
+    if (row.member_id === household.memberId) continue;
+    totals.set(row.member_id, (totals.get(row.member_id) ?? 0) + row.points);
+  }
+  await Promise.all(
+    [...totals].map(([memberId, points]) =>
+      sendPushToMember(supabase, memberId, {
+        title: "⭐ Points approved!",
+        body: `${points} chore points just landed in your balance.`,
+        url: "/dashboard",
+      })
+    )
+  );
+
   revalidatePath("/chores");
   revalidatePath("/dashboard");
 }
