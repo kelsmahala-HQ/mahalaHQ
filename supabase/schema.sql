@@ -217,6 +217,11 @@ end $$;
 -- repeats every 7 days from its due date, unchanged.
 alter table chores add column if not exists days_of_week integer[];
 
+-- For a multi-assignee chore: false (default) credits every assignee in full when anyone marks
+-- it done (a "we both did this" job). true instead credits only whoever actually clicked Mark
+-- done -- for an alternating/rotating chore where each person's turn should count on its own.
+alter table chores add column if not exists credit_whoever_completes boolean not null default false;
+
 -- Lets a chore be assigned to more than one person (e.g. a two-person job). assigned_member_id/
 -- assigned_to above stay populated too (first assignee / comma-joined names) for anything that
 -- hasn't been updated to read this table -- this is the source of truth going forward.

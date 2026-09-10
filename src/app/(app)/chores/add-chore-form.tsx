@@ -12,6 +12,7 @@ export type ChoreInitial = {
   daysOfWeek: number[] | null;
   points: number;
   dueDate: string | null;
+  creditWhoeverCompletes?: boolean;
 };
 
 export default function AddChoreForm({
@@ -73,6 +74,19 @@ export default function AddChoreForm({
             </label>
           ))}
         </div>
+        <label className="mt-2 flex items-center gap-1.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="credit_whoever_completes"
+            defaultChecked={initial?.creditWhoeverCompletes ?? false}
+            className="accent-teal-600"
+          />
+          Alternating chore — only whoever marks it done gets the points
+        </label>
+        <p className="mt-0.5 text-xs text-slate-400">
+          Leave unchecked for a shared job (e.g. moving the couch together) where everyone assigned gets full credit
+          every time.
+        </p>
       </div>
       <select name="frequency" className={inputClass} value={frequency} onChange={(e) => setFrequency(e.target.value)}>
         <option value="once">One-time</option>

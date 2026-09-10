@@ -21,6 +21,7 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
   const title = formData.get("title") as string;
   const frequency = (formData.get("frequency") as string) || "once";
   const daysOfWeek = (formData.getAll("days_of_week") as string[]).map(Number).filter((n) => !Number.isNaN(n));
+  const creditWhoeverCompletes = formData.get("credit_whoever_completes") === "on";
 
   const { data: chore, error } = await supabase
     .from("chores")
@@ -33,6 +34,7 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
       days_of_week: frequency === "weekly" && daysOfWeek.length ? daysOfWeek : null,
       points: Number(formData.get("points") || 0),
       due_date: (formData.get("due_date") as string) || null,
+      credit_whoever_completes: creditWhoeverCompletes,
     })
     .select("id")
     .single();
@@ -69,6 +71,7 @@ export async function updateChore(formData: FormData): Promise<{ error: string }
   const assignedMemberIds = (formData.getAll("assigned_member_id") as string[]).filter(Boolean);
   const frequency = (formData.get("frequency") as string) || "once";
   const daysOfWeek = (formData.getAll("days_of_week") as string[]).map(Number).filter((n) => !Number.isNaN(n));
+  const creditWhoeverCompletes = formData.get("credit_whoever_completes") === "on";
 
   let assignedNames: string[] = [];
   if (assignedMemberIds.length) {
@@ -88,6 +91,7 @@ export async function updateChore(formData: FormData): Promise<{ error: string }
       days_of_week: frequency === "weekly" && daysOfWeek.length ? daysOfWeek : null,
       points: Number(formData.get("points") || 0),
       due_date: (formData.get("due_date") as string) || null,
+      credit_whoever_completes: creditWhoeverCompletes,
     })
     .eq("id", id)
     .eq("household_id", household.householdId);
@@ -174,11 +178,18 @@ export async function completeChore(formData: FormData) {
   }
 
   // Logged separately from chores.status since recurring chores don't stay "done" -- this is
-  // the durable record used to total up points earned for the rewards balance. Every assignee
-  // on a shared chore gets full credit, not a split -- "you both did it" is worth crediting both.
+  // the durable record used to total up points earned for the rewards balance. By default every
+  // assignee on a shared chore gets full credit, not a split -- "you both did it" is worth
+  // crediting both. credit_whoever_completes flips that for an alternating/rotating chore
+  // instead -- only whoever actually clicked Mark done gets the points that time.
   if (chore.points > 0) {
-    const { data: assignees } = await supabase.from("chore_assignees").select("member_id").eq("chore_id", chore.id);
-    const memberIds = assignees?.length ? assignees.map((a) => a.member_id) : chore.assigned_member_id ? [chore.assigned_member_id] : [];
+    let memberIds: string[];
+    if (chore.credit_whoever_completes) {
+      memberIds = [household.memberId];
+    } else {
+      const { data: assignees } = await supabase.from("chore_assignees").select("member_id").eq("chore_id", chore.id);
+      memberIds = assignees?.length ? assignees.map((a) => a.member_id) : chore.assigned_member_id ? [chore.assigned_member_id] : [];
+    }
 
     if (memberIds.length) {
       const { error } = await supabase.from("chore_completions").insert(

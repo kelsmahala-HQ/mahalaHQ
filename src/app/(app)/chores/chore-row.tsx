@@ -14,6 +14,7 @@ type Chore = {
   days_of_week: number[] | null;
   due_date: string | null;
   assigned_to: string | null;
+  credit_whoever_completes: boolean;
 };
 
 type Due = { text: string; tone: "overdue" | "today" | "later" } | null;
@@ -51,6 +52,7 @@ export default function ChoreRow({
             daysOfWeek: chore.days_of_week,
             points: chore.points,
             dueDate: chore.due_date,
+            creditWhoeverCompletes: chore.credit_whoever_completes,
           }}
           onSaved={() => setEditing(false)}
         />
@@ -75,6 +77,14 @@ export default function ChoreRow({
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
           {!isKid && chore.assigned_to && <span className="text-sm text-slate-500">{chore.assigned_to}</span>}
           {frequencyLabel && <span className="text-sm text-slate-400">{frequencyLabel}</span>}
+          {chore.credit_whoever_completes && (
+            <span
+              title="Only whoever clicks Mark done gets the points, not every assignee"
+              className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700"
+            >
+              🔁 Alternating
+            </span>
+          )}
           {due && (
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-medium ${
