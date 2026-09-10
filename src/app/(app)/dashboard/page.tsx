@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { endOfWeek, format, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireHousehold } from "@/lib/household";
 import { Card, PageHeader } from "@/components/ui";
 import { PAY_PERIOD_OPTS, applyReschedules, occurrenceInPeriod } from "@/lib/pay-period";
 import { wallClockDate } from "@/lib/wall-clock";
+import { sendDueChoreReminders } from "@/lib/chore-reminders";
 import KidDashboard from "./kid-dashboard";
 import SitterDashboard from "./sitter-dashboard";
 import InboxCard from "./inbox-card";
@@ -15,6 +17,14 @@ function currency(n: number) {
 
 export default async function DashboardPage() {
   const household = await requireHousehold();
+
+  // Fallback for the scheduled Netlify function, which hasn't proven reliable: whoever opens
+  // the Dashboard first each day triggers today's "chores due" push round for the whole
+  // household. Awaited (not fire-and-forget) since a serverless function can get frozen right
+  // after the response is sent, which would cut off an unawaited background call before it
+  // finishes -- caught so it can never break the page if something in here fails.
+  await sendDueChoreReminders(createAdminClient(), { householdId: household.householdId }).catch(() => {});
+
   if (household.role === "kid") return <KidDashboard household={household} />;
   if (household.role === "sitter") return <SitterDashboard household={household} />;
 

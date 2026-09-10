@@ -703,6 +703,17 @@ create table if not exists calendar_event_reminders_sent (
   unique (event_id, occurrence_start_at, reminder_type)
 );
 
+-- Dedup marker for the once-a-day "chores due" push reminder -- whichever path gets there
+-- first for a household today (the Netlify scheduled function, if it fires, or a household
+-- member simply opening the Dashboard) claims it; everything else that day no-ops.
+create table if not exists chore_reminders_sent (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  date date not null,
+  created_at timestamptz not null default now(),
+  unique (household_id, date)
+);
+
 -- ============================================================================
 -- Row Level Security: every table is scoped to the caller's household(s)
 -- ============================================================================
@@ -744,6 +755,10 @@ alter table grocery_item_prices enable row level security;
 -- calendar_event_reminders_sent intentionally gets NO policies either -- same lockdown as
 -- plaid_items, since it's only ever touched by the scheduled Netlify function.
 alter table calendar_event_reminders_sent enable row level security;
+
+-- chore_reminders_sent: same lockdown -- only ever touched via the admin client (the scheduled
+-- function or the Dashboard page's fallback check), never the regular client.
+alter table chore_reminders_sent enable row level security;
 
 -- households: visible to members; any authenticated user may create one (onboarding)
 drop policy if exists households_select on households;
