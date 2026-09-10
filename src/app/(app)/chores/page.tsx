@@ -80,17 +80,43 @@ export default async function ChoresPage() {
     (pendingRedemptions ?? []).filter((r) => r.member_id === household.memberId).map((r) => r.reward_id)
   );
 
-  // Your own points, private to you -- approved chore completions only, same rule as the kid
-  // dashboard. Only computed when it'll actually be shown.
-  const [{ data: ownCompletions }, { data: ownRedemptions }] = canManage
+  // Everyone's point standing (admin/adult view). Balance = approved chore points earned minus
+  // points already reserved by a pending or approved reward redemption -- same math the kid
+  // dashboard and the redemption check use. The signed-in adult's own balance falls out of this
+  // too, for the private Adult Rewards card.
+  const [{ data: allCompletions }, { data: allReserved }] = canManage
     ? await Promise.all([
-        supabase.from("chore_completions").select("points").eq("member_id", household.memberId).eq("approval_status", "approved"),
-        supabase.from("reward_redemptions").select("cost").eq("member_id", household.memberId).in("status", ["pending", "approved"]),
+        supabase
+          .from("chore_completions")
+          .select("member_id, points, approval_status")
+          .eq("household_id", household.householdId),
+        supabase
+          .from("reward_redemptions")
+          .select("member_id, cost")
+          .eq("household_id", household.householdId)
+          .in("status", ["pending", "approved"]),
       ])
-    : [{ data: [] as { points: number }[] }, { data: [] as { cost: number }[] }];
-  const ownEarned = (ownCompletions ?? []).reduce((sum, c) => sum + c.points, 0);
-  const ownReserved = (ownRedemptions ?? []).reduce((sum, r) => sum + r.cost, 0);
-  const ownBalance = ownEarned - ownReserved;
+    : [{ data: [] as { member_id: string; points: number; approval_status: string }[] }, { data: [] as { member_id: string; cost: number }[] }];
+
+  const pointsByMember = new Map<string, { earned: number; pending: number; reserved: number }>();
+  const bucket = (id: string) => {
+    if (!pointsByMember.has(id)) pointsByMember.set(id, { earned: 0, pending: 0, reserved: 0 });
+    return pointsByMember.get(id)!;
+  };
+  for (const c of allCompletions ?? []) {
+    if (c.approval_status === "approved") bucket(c.member_id).earned += c.points;
+    else if (c.approval_status === "pending") bucket(c.member_id).pending += c.points;
+  }
+  for (const r of allReserved ?? []) bucket(r.member_id).reserved += r.cost;
+
+  const standings = (members ?? [])
+    .map((m) => {
+      const b = pointsByMember.get(m.id) ?? { earned: 0, pending: 0, reserved: 0 };
+      return { id: m.id, name: m.display_name, balance: b.earned - b.reserved, pending: b.pending };
+    })
+    .sort((a, z) => z.balance - a.balance || a.name.localeCompare(z.name));
+
+  const ownBalance = standings.find((s) => s.id === household.memberId)?.balance ?? 0;
 
   // Kid chore points waiting on a parent (admin view), and the activity log.
   const [{ data: pendingCompletions }, { data: activity }] = await Promise.all([
@@ -244,6 +270,27 @@ export default async function ChoresPage() {
         </div>
       )}
 
+      {canManage && !!standings.length && (
+        <Card className="mt-8">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">⭐ Points by person</h2>
+          <div className="space-y-1">
+            {standings.map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-sm font-medium text-slate-900">{s.name}</span>
+                <span className="flex items-baseline gap-2">
+                  <span className="text-sm font-semibold text-slate-700">🏆 {s.balance}</span>
+                  {s.pending > 0 && <span className="text-xs text-amber-600">+{s.pending} pending</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            Balance = approved chore points earned, minus points already promised to a reward that&rsquo;s been
+            requested or approved.
+          </p>
+        </Card>
+      )}
+
       {canManage && (
         <Card className="mt-8">
           <h2 className="mb-3 text-sm font-semibold text-slate-700">🎁 Kid Rewards</h2>
@@ -281,28 +328,24 @@ export default async function ChoresPage() {
           </p>
           <AddRewardForm audience="adult" />
           {!!adultRewards.length && (
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 grid grid-cols-2 gap-3">
               {adultRewards.map((r) => (
-                <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
-                  <div>
-                    <span className="text-sm text-slate-900">{r.name}</span>
-                    <span className="ml-2 text-xs text-slate-400">⭐ {r.cost}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-32">
-                      {ownPendingRewardIds.has(r.id) ? (
-                        <button disabled className="w-full rounded-xl bg-slate-100 py-2 text-xs font-bold text-slate-400">
-                          Waiting for approval
-                        </button>
-                      ) : (
-                        <RedeemButton rewardId={r.id} canAfford={ownBalance >= r.cost} />
-                      )}
-                    </div>
-                    <form action={deleteReward}>
-                      <input type="hidden" name="id" value={r.id} />
-                      <button className={iconButtonClass}>Remove</button>
-                    </form>
-                  </div>
+                <div key={r.id} className="relative rounded-2xl border-2 border-indigo-100 bg-white p-4 shadow-sm">
+                  <form action={deleteReward} className="absolute right-2 top-2">
+                    <input type="hidden" name="id" value={r.id} />
+                    <button title="Remove reward" className="text-sm leading-none text-slate-300 hover:text-red-500">
+                      ×
+                    </button>
+                  </form>
+                  <p className="pr-4 text-sm font-semibold text-slate-900">{r.name}</p>
+                  <p className="mb-2 mt-0.5 text-xs font-medium text-indigo-700">⭐ {r.cost}</p>
+                  {ownPendingRewardIds.has(r.id) ? (
+                    <button disabled className="w-full rounded-xl bg-slate-100 py-2 text-xs font-bold text-slate-400">
+                      Waiting for approval
+                    </button>
+                  ) : (
+                    <RedeemButton rewardId={r.id} canAfford={ownBalance >= r.cost} />
+                  )}
                 </div>
               ))}
             </div>
