@@ -34,18 +34,37 @@ function todayEasternDateStr(): string {
 async function choreReminders() {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!);
   const today = todayEasternDateStr();
+  console.log(`chore-reminders: checking for chores due on/before ${today}`);
 
-  const { data: chores } = await admin
+  const { data: chores, error: choresError } = await admin
     .from("chores")
     .select("id, title")
     .eq("status", "open")
     .not("due_date", "is", null)
     .lte("due_date", today);
 
-  if (!chores?.length) return;
+  if (choresError) {
+    console.error("chore-reminders: failed to fetch chores:", choresError.message);
+    return;
+  }
+
+  if (!chores?.length) {
+    console.log("chore-reminders: no open chores with a due date today or earlier -- nothing to send");
+    return;
+  }
+  console.log(`chore-reminders: ${chores.length} due chore(s): ${chores.map((c) => c.title).join(", ")}`);
 
   const choreIds = chores.map((c) => c.id);
-  const { data: assignees } = await admin.from("chore_assignees").select("chore_id, member_id").in("chore_id", choreIds);
+  const { data: assignees, error: assigneesError } = await admin
+    .from("chore_assignees")
+    .select("chore_id, member_id")
+    .in("chore_id", choreIds);
+
+  if (assigneesError) {
+    console.error("chore-reminders: failed to fetch assignees:", assigneesError.message);
+    return;
+  }
+  console.log(`chore-reminders: ${assignees?.length ?? 0} assignee row(s) found for those chores`);
 
   const titlesByMember = new Map<string, string[]>();
   for (const chore of chores) {
@@ -56,9 +75,19 @@ async function choreReminders() {
     }
   }
 
+  if (!titlesByMember.size) {
+    console.log("chore-reminders: due chores exist but none have anyone assigned -- nothing to send");
+    return;
+  }
+
   for (const [memberId, titles] of titlesByMember) {
     const title = titles.length === 1 ? "🧹 Chore due" : `🧹 ${titles.length} chores due`;
     const body = titles.length === 1 ? `${titles[0]} — tap to mark it done` : titles.join(", ");
+    const { count } = await admin
+      .from("push_subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("member_id", memberId);
+    console.log(`chore-reminders: sending to member ${memberId} (${count ?? 0} subscribed device(s)) -- ${title}: ${body}`);
     await sendPushToMember(admin, memberId, { title, body, url: "/chores" });
   }
 }
