@@ -240,6 +240,25 @@ insert into chore_assignees (household_id, chore_id, member_id)
 select household_id, id, assigned_member_id from chores where assigned_member_id is not null
 on conflict (chore_id, member_id) do nothing;
 
+-- Who is ALLOWED to claim/complete a chore -- deliberately separate from chore_assignees
+-- (whose chore it is / who gets reminders). "Mow Lawn" can be assigned to Luke but eligible to
+-- Luke only; "Clean Porch" can have no assignee at all and just be eligible to several people,
+-- first one to complete it earns the points. A chore with ZERO rows here = everyone eligible.
+create table if not exists chore_eligibility (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  chore_id uuid not null references chores(id) on delete cascade,
+  member_id uuid not null references household_members(id) on delete cascade,
+  unique (chore_id, member_id)
+);
+
+-- Backfill: existing chores keep their current visibility by seeding eligibility = assignees.
+-- Chores that had no assignee end up with zero rows here = everyone-eligible (intentional under
+-- the new model; adults can narrow them on the edit form). Safe to re-run.
+insert into chore_eligibility (household_id, chore_id, member_id)
+select household_id, chore_id, member_id from chore_assignees
+on conflict (chore_id, member_id) do nothing;
+
 -- Durable log of completed chores and the points they earned -- chores.status flips back to
 -- 'open' immediately for recurring chores, so it can't be used to total up points earned.
 create table if not exists chore_completions (
@@ -250,6 +269,28 @@ create table if not exists chore_completions (
   points integer not null default 0,
   completed_at timestamptz not null default now()
 );
+
+-- Kids' chore points wait for a parent to approve before they count toward a reward balance;
+-- admin/adult completions auto-approve. kind='skipped' is a 0-point "I only did part of this"
+-- (e.g. washed but didn't dry/fold) that still advances the recurring schedule. chore_title/
+-- member_name are snapshots so history survives the chore or member being deleted.
+alter table chore_completions add column if not exists approval_status text not null default 'approved';
+alter table chore_completions add column if not exists kind text not null default 'completed';
+alter table chore_completions add column if not exists chore_title text;
+alter table chore_completions add column if not exists member_name text;
+alter table chore_completions add column if not exists decided_at timestamptz;
+alter table chore_completions add column if not exists decided_by uuid references auth.users(id);
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'chore_completions_approval_status_check') then
+    alter table chore_completions add constraint chore_completions_approval_status_check
+      check (approval_status in ('approved', 'pending', 'rejected'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'chore_completions_kind_check') then
+    alter table chore_completions add constraint chore_completions_kind_check
+      check (kind in ('completed', 'skipped'));
+  end if;
+end $$;
 
 -- Parent-defined catalog of things kids can redeem points for (extra screen time, allowance, etc).
 create table if not exists rewards (
@@ -751,6 +792,7 @@ alter table day_planner_tasks enable row level security;
 alter table inbox_items enable row level security;
 alter table emergency_info_sections enable row level security;
 alter table grocery_item_prices enable row level security;
+alter table chore_eligibility enable row level security;
 
 -- calendar_event_reminders_sent intentionally gets NO policies either -- same lockdown as
 -- plaid_items, since it's only ever touched by the scheduled Netlify function.
@@ -797,7 +839,7 @@ declare
     'budget_categories', 'budget_transactions', 'debts', 'bills', 'bill_payments', 'bill_reschedules',
     'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks',
     'day_planner_highlights', 'cleaning_tasks', 'recipes', 'recipe_ingredients', 'meal_plan_entries',
-    'chore_assignees', 'cleaning_task_assignees', 'inbox_items', 'emergency_info_sections',
+    'chore_assignees', 'chore_eligibility', 'cleaning_task_assignees', 'inbox_items', 'emergency_info_sections',
     'grocery_item_prices'
   ];
 begin

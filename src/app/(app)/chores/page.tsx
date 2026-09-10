@@ -1,8 +1,15 @@
-import { addDays, format } from "date-fns";
+import { addDays, format, formatDistanceToNow } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireHousehold } from "@/lib/household";
+import { todayEasternDateStr } from "@/lib/chore-reminders";
 import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
 import { daysOfWeekLabel } from "@/lib/weekdays";
+import { availableNow, eligibleFor, upcoming } from "./availability";
+import {
+  approveAllChoreCompletions,
+  approveChoreCompletion,
+  rejectChoreCompletion,
+} from "./actions";
 import { deleteReward, approveRedemption, denyRedemption } from "./rewards-actions";
 import AddChoreForm from "./add-chore-form";
 import AddRewardForm from "./add-reward-form";
@@ -29,43 +36,43 @@ export default async function ChoresPage() {
   const supabase = await createClient();
   const isKid = household.role === "kid";
   const canManage = household.role === "admin" || household.role === "adult";
+  const todayStr = todayEasternDateStr();
 
-  // For a kid, resolve which chores they're assigned to first (a plain lookup, not an embedded
-  // join in the select string -- Supabase's typed select-string parser chokes on a computed
-  // "!inner" embed passed conditionally), then filter the main chores query with .in().
-  let assignedChoreIds: string[] | null = null;
-  if (isKid) {
-    const { data: assignedRows } = await supabase.from("chore_assignees").select("chore_id").eq("member_id", household.memberId);
-    assignedChoreIds = (assignedRows ?? []).map((r) => r.chore_id);
-  }
-
-  const [{ data: members }, choresQuery, { data: rewards }, { data: pendingRedemptions }] = await Promise.all([
-    supabase.from("household_members").select("id, display_name").eq("household_id", household.householdId).order("display_name"),
-    assignedChoreIds && !assignedChoreIds.length
-      ? Promise.resolve({ data: [] })
-      : (() => {
-          let query = supabase
-            .from("chores")
+  const [{ data: members }, { data: chores }, { data: rewards }, { data: pendingRedemptions }, { data: eligibilityRows }] =
+    await Promise.all([
+      supabase.from("household_members").select("id, display_name").eq("household_id", household.householdId).order("display_name"),
+      supabase
+        .from("chores")
+        .select("*")
+        .eq("household_id", household.householdId)
+        .order("status")
+        .order("due_date", { nullsFirst: false }),
+      canManage ? supabase.from("rewards").select("*").eq("household_id", household.householdId).order("cost") : Promise.resolve({ data: [] }),
+      canManage
+        ? supabase
+            .from("reward_redemptions")
             .select("*")
             .eq("household_id", household.householdId)
-            .order("status")
-            .order("due_date", { nullsFirst: false });
-          if (assignedChoreIds) query = query.in("id", assignedChoreIds);
-          return query;
-        })(),
-    canManage ? supabase.from("rewards").select("*").eq("household_id", household.householdId).order("cost") : Promise.resolve({ data: [] }),
-    canManage
-      ? supabase
-          .from("reward_redemptions")
-          .select("*")
-          .eq("household_id", household.householdId)
-          .eq("status", "pending")
-          .order("requested_at")
-      : Promise.resolve({ data: [] }),
-  ]);
-  const { data: chores } = choresQuery;
+            .eq("status", "pending")
+            .order("requested_at")
+        : Promise.resolve({ data: [] }),
+      supabase.from("chore_eligibility").select("chore_id, member_id").eq("household_id", household.householdId),
+    ]);
+
   const memberNameById = new Map((members ?? []).map((m) => [m.id, m.display_name]));
-  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // chore_id -> members explicitly allowed to claim it. No entry (or empty) = everyone.
+  const eligibleByChore = new Map<string, string[]>();
+  for (const row of eligibilityRows ?? []) {
+    if (!eligibleByChore.has(row.chore_id)) eligibleByChore.set(row.chore_id, []);
+    eligibleByChore.get(row.chore_id)!.push(row.member_id);
+  }
+
+  const visibleChores = (chores ?? []).filter((c) => eligibleFor(eligibleByChore.get(c.id), household.memberId, canManage));
+  const availableChores = visibleChores.filter((c) => availableNow(c, todayStr));
+  const upcomingChores = visibleChores.filter(
+    (c) => upcoming(c, todayStr) || (canManage && c.frequency === "once" && c.status === "done")
+  );
 
   const kidRewards = (rewards ?? []).filter((r) => r.audience !== "adult");
   const adultRewards = (rewards ?? []).filter((r) => r.audience === "adult");
@@ -73,11 +80,11 @@ export default async function ChoresPage() {
     (pendingRedemptions ?? []).filter((r) => r.member_id === household.memberId).map((r) => r.reward_id)
   );
 
-  // Your own points, private to you -- same balance math as the kid dashboard, just scoped to
-  // the signed-in admin/adult instead of a kid. Only computed when it'll actually be shown.
+  // Your own points, private to you -- approved chore completions only, same rule as the kid
+  // dashboard. Only computed when it'll actually be shown.
   const [{ data: ownCompletions }, { data: ownRedemptions }] = canManage
     ? await Promise.all([
-        supabase.from("chore_completions").select("points").eq("member_id", household.memberId),
+        supabase.from("chore_completions").select("points").eq("member_id", household.memberId).eq("approval_status", "approved"),
         supabase.from("reward_redemptions").select("cost").eq("member_id", household.memberId).in("status", ["pending", "approved"]),
       ])
     : [{ data: [] as { points: number }[] }, { data: [] as { cost: number }[] }];
@@ -85,7 +92,30 @@ export default async function ChoresPage() {
   const ownReserved = (ownRedemptions ?? []).reduce((sum, r) => sum + r.cost, 0);
   const ownBalance = ownEarned - ownReserved;
 
-  const choreIds = (chores ?? []).map((c) => c.id);
+  // Kid chore points waiting on a parent (admin view), and the activity log.
+  const [{ data: pendingCompletions }, { data: activity }] = await Promise.all([
+    canManage
+      ? supabase
+          .from("chore_completions")
+          .select("*")
+          .eq("household_id", household.householdId)
+          .eq("approval_status", "pending")
+          .eq("kind", "completed")
+          .order("completed_at")
+      : Promise.resolve({ data: [] as ChoreCompletion[] }),
+    (() => {
+      let q = supabase
+        .from("chore_completions")
+        .select("*")
+        .eq("household_id", household.householdId)
+        .order("completed_at", { ascending: false })
+        .limit(50);
+      if (!canManage) q = q.eq("member_id", household.memberId);
+      return q;
+    })(),
+  ]);
+
+  const choreIds = visibleChores.map((c) => c.id);
   const { data: assigneeRows } = choreIds.length
     ? await supabase.from("chore_assignees").select("chore_id, member_id").in("chore_id", choreIds)
     : { data: [] as { chore_id: string; member_id: string }[] };
@@ -95,17 +125,76 @@ export default async function ChoresPage() {
     assigneesByChore.get(row.chore_id)!.push(row.member_id);
   }
 
+  function renderChore(chore: (typeof visibleChores)[number], mode: "available" | "upcoming") {
+    return (
+      <ChoreRow
+        key={chore.id}
+        chore={chore}
+        due={dueStatus(chore.due_date, todayStr)}
+        isKid={isKid}
+        canManage={canManage}
+        members={members ?? []}
+        assignedMemberIds={assigneesByChore.get(chore.id) ?? (chore.assigned_member_id ? [chore.assigned_member_id] : [])}
+        eligibleMemberIds={eligibleByChore.get(chore.id) ?? []}
+        frequencyLabel={chore.frequency !== "once" ? frequencyLabel(chore.frequency, chore.days_of_week) : null}
+        mode={mode}
+      />
+    );
+  }
+
   return (
     <div>
       <PageHeader
         title={isKid ? "Your Chores" : "Chores"}
-        subtitle={isKid ? "Everything assigned to you." : "Assign tasks and track who's done what."}
+        subtitle={isKid ? "Everything you can do right now." : "Assign tasks and track who's done what."}
       />
 
       {canManage && (
         <CollapsibleCard title="Add a chore" className="mb-8">
           <AddChoreForm members={members ?? []} />
         </CollapsibleCard>
+      )}
+
+      {canManage && !!pendingCompletions?.length && (
+        <Card className="mb-8 !bg-amber-50">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">✅ Chore points waiting for your approval</h2>
+            {pendingCompletions.length > 1 && (
+              <form action={approveAllChoreCompletions}>
+                <button className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700">
+                  Approve all
+                </button>
+              </form>
+            )}
+          </div>
+          <div className="space-y-2">
+            {pendingCompletions.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2">
+                <p className="text-sm text-slate-900">
+                  <span className="font-medium">{c.member_name ?? memberNameById.get(c.member_id) ?? "Someone"}</span> did{" "}
+                  <span className="font-medium">{c.chore_title ?? "a chore"}</span>{" "}
+                  <span className="text-slate-400">
+                    (⭐ {c.points} · {formatDistanceToNow(new Date(c.completed_at), { addSuffix: true })})
+                  </span>
+                </p>
+                <div className="flex gap-2">
+                  <form action={approveChoreCompletion}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <button className="rounded-lg bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700 hover:bg-teal-100">
+                      Approve
+                    </button>
+                  </form>
+                  <form action={rejectChoreCompletion}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <button className="rounded-lg bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100">
+                      Reject
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       {canManage && !!pendingRedemptions?.length && (
@@ -138,22 +227,20 @@ export default async function ChoresPage() {
         </Card>
       )}
 
-      {!chores?.length ? (
-        <EmptyState message={isKid ? "Nothing assigned to you right now. 🎉" : "No chores yet — add one above."} />
+      {!availableChores.length ? (
+        <EmptyState
+          message={
+            isKid ? "Nothing to do right now. 🎉" : "Nothing available right now — add a chore or check Upcoming below."
+          }
+        />
       ) : (
-        <div className="space-y-2">
-          {chores.map((chore) => (
-            <ChoreRow
-              key={chore.id}
-              chore={chore}
-              due={dueStatus(chore.due_date, todayStr)}
-              isKid={isKid}
-              canManage={canManage}
-              members={members ?? []}
-              assignedMemberIds={assigneesByChore.get(chore.id) ?? (chore.assigned_member_id ? [chore.assigned_member_id] : [])}
-              frequencyLabel={chore.frequency !== "once" ? frequencyLabel(chore.frequency, chore.days_of_week) : null}
-            />
-          ))}
+        <div className="space-y-2">{availableChores.map((chore) => renderChore(chore, "available"))}</div>
+      )}
+
+      {!!upcomingChores.length && (
+        <div className="mt-8">
+          <h2 className="mb-2 text-sm font-semibold text-slate-500">⏳ Upcoming</h2>
+          <div className="space-y-2">{upcomingChores.map((chore) => renderChore(chore, "upcoming"))}</div>
         </div>
       )}
 
@@ -222,6 +309,46 @@ export default async function ChoresPage() {
           )}
         </Card>
       )}
+
+      {!!activity?.length && (
+        <CollapsibleCard title="📋 Chore activity" className="mt-8">
+          <div className="space-y-1">
+            {activity.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                <span className="text-slate-900">
+                  <span className="font-medium">{c.member_name ?? memberNameById.get(c.member_id) ?? "Someone"}</span>{" "}
+                  {c.kind === "skipped" ? "skipped" : "did"} {c.chore_title ?? "a chore"}
+                </span>
+                <span className="flex items-center gap-2 text-xs text-slate-400">
+                  {c.kind === "skipped" ? (
+                    <span className="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">Skipped · 0 pts</span>
+                  ) : (
+                    <span className="text-slate-500">⭐ {c.points}</span>
+                  )}
+                  {c.approval_status === "pending" && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">Pending</span>
+                  )}
+                  {c.approval_status === "rejected" && (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-700">Rejected</span>
+                  )}
+                  <span>{format(new Date(c.completed_at), "MMM d, h:mma")}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </CollapsibleCard>
+      )}
     </div>
   );
 }
+
+type ChoreCompletion = {
+  id: string;
+  member_id: string;
+  member_name: string | null;
+  chore_title: string | null;
+  points: number;
+  kind: "completed" | "skipped";
+  approval_status: "approved" | "pending" | "rejected";
+  completed_at: string;
+};

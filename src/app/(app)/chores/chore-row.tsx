@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card, iconButtonClass } from "@/components/ui";
-import { completeChore, deleteChore, updateChore } from "./actions";
+import { completeChore, deleteChore, makeChoreAvailable, skipChore, updateChore } from "./actions";
 import AddChoreForm from "./add-chore-form";
 
 type Chore = {
@@ -26,7 +26,9 @@ export default function ChoreRow({
   canManage,
   members,
   assignedMemberIds,
+  eligibleMemberIds,
   frequencyLabel,
+  mode = "available",
 }: {
   chore: Chore;
   due: Due;
@@ -34,9 +36,12 @@ export default function ChoreRow({
   canManage: boolean;
   members: { id: string; display_name: string }[];
   assignedMemberIds: string[];
+  eligibleMemberIds: string[];
   frequencyLabel: string | null;
+  mode?: "available" | "upcoming";
 }) {
   const [editing, setEditing] = useState(false);
+  const upcoming = mode === "upcoming";
 
   if (editing) {
     return (
@@ -48,6 +53,7 @@ export default function ChoreRow({
           initial={{
             title: chore.title,
             assignedMemberIds,
+            eligibleMemberIds,
             frequency: chore.frequency,
             daysOfWeek: chore.days_of_week,
             points: chore.points,
@@ -64,7 +70,7 @@ export default function ChoreRow({
   }
 
   return (
-    <Card className="flex items-center justify-between !p-4">
+    <Card className={`flex items-center justify-between !p-4 ${upcoming ? "opacity-70" : ""}`}>
       <div>
         <p className={`font-medium ${chore.status === "done" ? "text-slate-400 line-through" : "text-slate-900"}`}>
           {chore.title}
@@ -95,19 +101,40 @@ export default function ChoreRow({
                     : "bg-slate-100 text-slate-600"
               }`}
             >
-              {due.text}
+              {upcoming ? due.text.replace(/^Due /, "Available ") : due.text}
             </span>
           )}
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <form action={completeChore}>
-          <input type="hidden" name="id" value={chore.id} />
-          <input type="hidden" name="frequency" value={chore.frequency} />
-          <button className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-bold text-white hover:bg-teal-600">
-            {chore.status === "done" ? "Done! ✅" : "Mark done ✅"}
-          </button>
-        </form>
+        {upcoming ? (
+          canManage && (
+            <form action={makeChoreAvailable}>
+              <input type="hidden" name="id" value={chore.id} />
+              <button className="rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 hover:bg-teal-100">
+                Make available now
+              </button>
+            </form>
+          )
+        ) : (
+          <>
+            <form action={completeChore}>
+              <input type="hidden" name="id" value={chore.id} />
+              <button className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-bold text-white hover:bg-teal-600">
+                {chore.status === "done" ? "Done! ✅" : "Mark done ✅"}
+              </button>
+            </form>
+            <form action={skipChore}>
+              <input type="hidden" name="id" value={chore.id} />
+              <button
+                title="Advances the schedule but earns 0 points — for when you only did part of it"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50"
+              >
+                Skip
+              </button>
+            </form>
+          </>
+        )}
         {canManage && (
           <>
             <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-teal-600 hover:text-teal-500">

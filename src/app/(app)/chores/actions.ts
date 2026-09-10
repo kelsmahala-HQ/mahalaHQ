@@ -1,14 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { requireHousehold } from "@/lib/household";
+import { requireAdult, requireHousehold } from "@/lib/household";
 import { sendPushToMember } from "@/lib/push";
+import { todayEasternDateStr } from "@/lib/chore-reminders";
 
 export async function addChore(formData: FormData): Promise<{ error: string } | { success: true }> {
   const household = await requireHousehold();
   const supabase = await createClient();
   const assignedMemberIds = (formData.getAll("assigned_member_id") as string[]).filter(Boolean);
+  const eligibleMemberIds = (formData.getAll("eligible_member_id") as string[]).filter(Boolean);
 
   let assignedNames: string[] = [];
   if (assignedMemberIds.length) {
@@ -56,7 +59,16 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
     }
   }
 
+  // Eligibility is separate from assignment: no rows = everyone can claim it.
+  if (eligibleMemberIds.length) {
+    const { error: eligError } = await supabase
+      .from("chore_eligibility")
+      .insert(eligibleMemberIds.map((memberId) => ({ household_id: household.householdId, chore_id: chore.id, member_id: memberId })));
+    if (eligError) return { error: eligError.message };
+  }
+
   revalidatePath("/chores");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -69,6 +81,7 @@ export async function updateChore(formData: FormData): Promise<{ error: string }
   if (!title) return { error: "Name the chore." };
 
   const assignedMemberIds = (formData.getAll("assigned_member_id") as string[]).filter(Boolean);
+  const eligibleMemberIds = (formData.getAll("eligible_member_id") as string[]).filter(Boolean);
   const frequency = (formData.get("frequency") as string) || "once";
   const daysOfWeek = (formData.getAll("days_of_week") as string[]).map(Number).filter((n) => !Number.isNaN(n));
   const creditWhoeverCompletes = formData.get("credit_whoever_completes") === "on";
@@ -106,6 +119,16 @@ export async function updateChore(formData: FormData): Promise<{ error: string }
       .from("chore_assignees")
       .insert(assignedMemberIds.map((memberId) => ({ household_id: household.householdId, chore_id: id, member_id: memberId })));
     if (assigneeError) return { error: assigneeError.message };
+  }
+
+  const { error: deleteEligError } = await supabase.from("chore_eligibility").delete().eq("chore_id", id);
+  if (deleteEligError) return { error: deleteEligError.message };
+
+  if (eligibleMemberIds.length) {
+    const { error: eligError } = await supabase
+      .from("chore_eligibility")
+      .insert(eligibleMemberIds.map((memberId) => ({ household_id: household.householdId, chore_id: id, member_id: memberId })));
+    if (eligError) return { error: eligError.message };
   }
 
   revalidatePath("/chores");
@@ -149,6 +172,70 @@ function advanceDueDate(dateStr: string, frequency: string, daysOfWeek?: number[
   return d.toISOString().slice(0, 10);
 }
 
+type ChoreRow = {
+  id: string;
+  frequency: string;
+  status: string;
+  due_date: string | null;
+  days_of_week: number[] | null;
+};
+
+/**
+ * Shared by completeChore and skipChore: a one-time chore flips to done; a recurring chore
+ * resets to open immediately (so it reappears next cycle) and its due date advances to the next
+ * occurrence. Returns false if there was nothing to advance (a one-time chore already done).
+ */
+async function advanceChoreSchedule(supabase: SupabaseClient, chore: ChoreRow): Promise<boolean> {
+  if (chore.frequency === "once") {
+    if (chore.status === "done") return false;
+    const { error } = await supabase
+      .from("chores")
+      .update({ status: "done", last_completed_at: new Date().toISOString() })
+      .eq("id", chore.id);
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
+  const nextDue = chore.due_date ? advanceDueDate(chore.due_date, chore.frequency, chore.days_of_week) : null;
+  const { error } = await supabase
+    .from("chores")
+    .update({ status: "open", last_completed_at: new Date().toISOString(), due_date: nextDue })
+    .eq("id", chore.id);
+  if (error) throw new Error(error.message);
+  return true;
+}
+
+/** Who earns the points, and their display name + whether their points auto-approve. */
+async function creditRecipients(
+  supabase: SupabaseClient,
+  chore: { id: string; credit_whoever_completes: boolean; assigned_member_id: string | null },
+  clickerMemberId: string
+): Promise<{ memberId: string; name: string | null; autoApprove: boolean }[]> {
+  const { data: assignees } = await supabase.from("chore_assignees").select("member_id").eq("chore_id", chore.id);
+  const assigneeIds = (assignees ?? []).map((a) => a.member_id);
+
+  // Alternating chore, or a shared/unassigned "first person to do it earns it" chore -> only
+  // whoever clicked. Otherwise every assignee gets full credit ("you both did it").
+  const memberIds =
+    chore.credit_whoever_completes || assigneeIds.length === 0
+      ? [clickerMemberId]
+      : assigneeIds;
+
+  const { data: memberRows } = await supabase
+    .from("household_members")
+    .select("id, display_name, role")
+    .in("id", memberIds);
+
+  return memberIds.map((memberId) => {
+    const row = memberRows?.find((m) => m.id === memberId);
+    return {
+      memberId,
+      name: row?.display_name ?? null,
+      autoApprove: row?.role === "admin" || row?.role === "adult",
+    };
+  });
+}
+
 export async function completeChore(formData: FormData) {
   const household = await requireHousehold();
   const supabase = await createClient();
@@ -157,53 +244,124 @@ export async function completeChore(formData: FormData) {
   const { data: chore, error: fetchError } = await supabase.from("chores").select("*").eq("id", id).single();
   if (fetchError) throw new Error(fetchError.message);
   if (!chore) return;
-  if (chore.frequency === "once" && chore.status === "done") return; // already completed
 
-  if (chore.frequency === "once") {
-    const { error } = await supabase
-      .from("chores")
-      .update({ status: "done", last_completed_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) throw new Error(error.message);
-  } else {
-    // Recurring chores reset to open immediately so they reappear for the next cycle, and
-    // the due date advances to the next occurrence -- otherwise the row looks unchanged
-    // after marking it done, which just looks like the button didn't do anything.
-    const nextDue = chore.due_date ? advanceDueDate(chore.due_date, chore.frequency, chore.days_of_week) : null;
-    const { error } = await supabase
-      .from("chores")
-      .update({ status: "open", last_completed_at: new Date().toISOString(), due_date: nextDue })
-      .eq("id", id);
-    if (error) throw new Error(error.message);
-  }
+  const advanced = await advanceChoreSchedule(supabase, chore);
+  if (!advanced) return; // one-time chore already done
 
-  // Logged separately from chores.status since recurring chores don't stay "done" -- this is
-  // the durable record used to total up points earned for the rewards balance. By default every
-  // assignee on a shared chore gets full credit, not a split -- "you both did it" is worth
-  // crediting both. credit_whoever_completes flips that for an alternating/rotating chore
-  // instead -- only whoever actually clicked Mark done gets the points that time.
   if (chore.points > 0) {
-    let memberIds: string[];
-    if (chore.credit_whoever_completes) {
-      memberIds = [household.memberId];
-    } else {
-      const { data: assignees } = await supabase.from("chore_assignees").select("member_id").eq("chore_id", chore.id);
-      memberIds = assignees?.length ? assignees.map((a) => a.member_id) : chore.assigned_member_id ? [chore.assigned_member_id] : [];
-    }
-
-    if (memberIds.length) {
+    const recipients = await creditRecipients(supabase, chore, household.memberId);
+    if (recipients.length) {
+      const now = new Date().toISOString();
       const { error } = await supabase.from("chore_completions").insert(
-        memberIds.map((memberId) => ({
+        recipients.map((r) => ({
           household_id: household.householdId,
           chore_id: chore.id,
-          member_id: memberId,
+          member_id: r.memberId,
           points: chore.points,
+          kind: "completed",
+          approval_status: r.autoApprove ? "approved" : "pending",
+          chore_title: chore.title,
+          member_name: r.name,
+          decided_at: r.autoApprove ? now : null,
+          decided_by: r.autoApprove ? household.userId : null,
         }))
       );
       if (error) throw new Error(error.message);
     }
   }
 
+  revalidatePath("/chores");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * Like completeChore but awards 0 points -- for "I only did part of this" (washed a load but
+ * didn't dry or fold it). Still advances the recurring schedule so the chore doesn't sit there
+ * looking overdue, and lands in the activity log as a skip.
+ */
+export async function skipChore(formData: FormData) {
+  const household = await requireHousehold();
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  const { data: chore, error: fetchError } = await supabase.from("chores").select("*").eq("id", id).single();
+  if (fetchError) throw new Error(fetchError.message);
+  if (!chore) return;
+
+  const advanced = await advanceChoreSchedule(supabase, chore);
+  if (!advanced) return;
+
+  const { error } = await supabase.from("chore_completions").insert({
+    household_id: household.householdId,
+    chore_id: chore.id,
+    member_id: household.memberId,
+    points: 0,
+    kind: "skipped",
+    approval_status: "approved",
+    chore_title: chore.title,
+    member_name: household.displayName,
+  });
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/chores");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * Adult override: force a chore back to claimable right now -- a recurring chore whose due date
+ * is in the future (the just-cleaned porch got re-dirtied by a storm), or a finished one-time
+ * chore that needs redoing.
+ */
+export async function makeChoreAvailable(formData: FormData) {
+  const household = await requireAdult();
+  const supabase = await createClient();
+  const id = formData.get("id") as string;
+
+  const { error } = await supabase
+    .from("chores")
+    .update({ status: "open", due_date: todayEasternDateStr() })
+    .eq("id", id)
+    .eq("household_id", household.householdId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/chores");
+  revalidatePath("/dashboard");
+}
+
+export async function approveChoreCompletion(formData: FormData) {
+  const household = await requireAdult();
+  const supabase = await createClient();
+  await supabase
+    .from("chore_completions")
+    .update({ approval_status: "approved", decided_at: new Date().toISOString(), decided_by: household.userId })
+    .eq("id", formData.get("id") as string)
+    .eq("household_id", household.householdId);
+  revalidatePath("/chores");
+  revalidatePath("/dashboard");
+}
+
+/** Rejecting keeps the row (so it still shows in history) but it never counts toward a balance. */
+export async function rejectChoreCompletion(formData: FormData) {
+  const household = await requireAdult();
+  const supabase = await createClient();
+  await supabase
+    .from("chore_completions")
+    .update({ approval_status: "rejected", decided_at: new Date().toISOString(), decided_by: household.userId })
+    .eq("id", formData.get("id") as string)
+    .eq("household_id", household.householdId);
+  revalidatePath("/chores");
+  revalidatePath("/dashboard");
+}
+
+export async function approveAllChoreCompletions() {
+  const household = await requireAdult();
+  const supabase = await createClient();
+  await supabase
+    .from("chore_completions")
+    .update({ approval_status: "approved", decided_at: new Date().toISOString(), decided_by: household.userId })
+    .eq("household_id", household.householdId)
+    .eq("approval_status", "pending")
+    .eq("kind", "completed");
   revalidatePath("/chores");
   revalidatePath("/dashboard");
 }

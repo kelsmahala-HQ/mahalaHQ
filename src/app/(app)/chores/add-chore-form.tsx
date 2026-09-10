@@ -8,6 +8,7 @@ import { addChore } from "./actions";
 export type ChoreInitial = {
   title: string;
   assignedMemberIds: string[];
+  eligibleMemberIds: string[];
   frequency: string;
   daysOfWeek: number[] | null;
   points: number;
@@ -29,10 +30,12 @@ export default function AddChoreForm({
   onSaved?: () => void;
 }) {
   const [frequency, setFrequency] = useState(initial?.frequency ?? "weekly");
+  const [restrictEligibility, setRestrictEligibility] = useState((initial?.eligibleMemberIds?.length ?? 0) > 0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const selectedMemberIds = new Set(initial?.assignedMemberIds ?? []);
+  const selectedEligibleIds = new Set(initial?.eligibleMemberIds ?? []);
   const selectedDays = new Set(initial?.daysOfWeek ?? []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -49,6 +52,7 @@ export default function AddChoreForm({
       if (!choreId) {
         form.reset();
         setFrequency("weekly");
+        setRestrictEligibility(false);
       }
       onSaved?.();
     }
@@ -59,7 +63,9 @@ export default function AddChoreForm({
       {choreId && <input type="hidden" name="id" value={choreId} />}
       <input name="title" required defaultValue={initial?.title} placeholder="Chore (e.g. Take out trash)" className={inputClass} />
       <div className="sm:col-span-2">
-        <label className="mb-1 block text-xs font-medium text-slate-500">Who (pick one or more, or leave unassigned)</label>
+        <label className="mb-1 block text-xs font-medium text-slate-500">
+          Whose chore is this? (assignment — they get the reminder; leave blank for none)
+        </label>
         <div className="flex flex-wrap gap-3">
           {members?.map((m) => (
             <label key={m.id} className="flex items-center gap-1.5 text-sm text-slate-700">
@@ -87,6 +93,37 @@ export default function AddChoreForm({
           Leave unchecked for a shared job (e.g. moving the couch together) where everyone assigned gets full credit
           every time.
         </p>
+      </div>
+      <div className="sm:col-span-2">
+        <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={!restrictEligibility}
+            onChange={(e) => setRestrictEligibility(!e.target.checked)}
+            className="accent-teal-600"
+          />
+          Anyone can do this chore
+        </label>
+        <p className="mt-0.5 text-xs text-slate-400">
+          Uncheck to limit who&rsquo;s allowed to claim it — e.g. &ldquo;Mow the lawn&rdquo; only shows for Luke, or
+          &ldquo;Clean porch&rdquo; shows for a few people and the first to finish it earns the points.
+        </p>
+        {restrictEligibility && (
+          <div className="mt-2 flex flex-wrap gap-3">
+            {members?.map((m) => (
+              <label key={m.id} className="flex items-center gap-1.5 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  name="eligible_member_id"
+                  value={m.id}
+                  defaultChecked={selectedEligibleIds.has(m.id)}
+                  className="accent-teal-600"
+                />
+                {m.display_name}
+              </label>
+            ))}
+          </div>
+        )}
       </div>
       <select name="frequency" className={inputClass} value={frequency} onChange={(e) => setFrequency(e.target.value)}>
         <option value="once">One-time</option>

@@ -45,7 +45,7 @@ export async function requestRedemption(formData: FormData): Promise<{ error: st
   if (!reward) return { error: "That reward no longer exists." };
 
   const [{ data: completions }, { data: redemptions }] = await Promise.all([
-    supabase.from("chore_completions").select("points").eq("member_id", household.memberId),
+    supabase.from("chore_completions").select("points").eq("member_id", household.memberId).eq("approval_status", "approved"),
     supabase.from("reward_redemptions").select("cost").eq("member_id", household.memberId).in("status", ["pending", "approved"]),
   ]);
   const earned = (completions ?? []).reduce((sum, c) => sum + c.points, 0);

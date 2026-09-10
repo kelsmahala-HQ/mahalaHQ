@@ -2,35 +2,46 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import type { CurrentHousehold } from "@/lib/household";
-import { completeChore } from "../chores/actions";
+import { todayEasternDateStr } from "@/lib/chore-reminders";
+import { completeChore, skipChore } from "../chores/actions";
+import { availableNow, eligibleFor, upcoming } from "../chores/availability";
 import { wallClockDate } from "@/lib/wall-clock";
 import RedeemButton from "../chores/redeem-button";
 
 export default async function KidDashboard({ household }: { household: CurrentHousehold }) {
   const supabase = await createClient();
+  const todayStr = todayEasternDateStr();
 
-  const { data: assignedRows } = await supabase.from("chore_assignees").select("chore_id").eq("member_id", household.memberId);
-  const assignedChoreIds = (assignedRows ?? []).map((r) => r.chore_id);
+  const [{ data: allChores }, { data: eligibilityRows }, { data: completions }, { data: rewards }, { data: redemptions }] =
+    await Promise.all([
+      supabase
+        .from("chores")
+        .select("*")
+        .eq("household_id", household.householdId)
+        .order("due_date", { nullsFirst: false }),
+      supabase.from("chore_eligibility").select("chore_id, member_id").eq("household_id", household.householdId),
+      supabase.from("chore_completions").select("points, approval_status").eq("member_id", household.memberId),
+      supabase.from("rewards").select("*").eq("household_id", household.householdId).eq("audience", "kid").order("cost"),
+      supabase.from("reward_redemptions").select("*").eq("member_id", household.memberId).order("requested_at", { ascending: false }),
+    ]);
 
-  const [{ data: chores }, { data: completions }, { data: rewards }, { data: redemptions }] = await Promise.all([
-    assignedChoreIds.length
-      ? supabase
-          .from("chores")
-          .select("*")
-          .eq("household_id", household.householdId)
-          .in("id", assignedChoreIds)
-          .order("status")
-          .order("due_date", { nullsFirst: false })
-      : Promise.resolve({ data: [] }),
-    supabase.from("chore_completions").select("points").eq("member_id", household.memberId),
-    supabase.from("rewards").select("*").eq("household_id", household.householdId).eq("audience", "kid").order("cost"),
-    supabase.from("reward_redemptions").select("*").eq("member_id", household.memberId).order("requested_at", { ascending: false }),
-  ]);
+  const eligibleByChore = new Map<string, string[]>();
+  for (const row of eligibilityRows ?? []) {
+    if (!eligibleByChore.has(row.chore_id)) eligibleByChore.set(row.chore_id, []);
+    eligibleByChore.get(row.chore_id)!.push(row.member_id);
+  }
 
-  const openChores = (chores ?? []).filter((c) => c.status === "open");
+  const myChores = (allChores ?? []).filter((c) => eligibleFor(eligibleByChore.get(c.id), household.memberId, false));
+  const openChores = myChores.filter((c) => availableNow(c, todayStr));
+  const upcomingChores = myChores.filter((c) => upcoming(c, todayStr));
   const availablePoints = openChores.reduce((sum, c) => sum + (c.points ?? 0), 0);
 
-  const earned = (completions ?? []).reduce((sum, c) => sum + c.points, 0);
+  const earned = (completions ?? [])
+    .filter((c) => c.approval_status === "approved")
+    .reduce((sum, c) => sum + c.points, 0);
+  const pendingPoints = (completions ?? [])
+    .filter((c) => c.approval_status === "pending")
+    .reduce((sum, c) => sum + c.points, 0);
   const pendingRedemptions = (redemptions ?? []).filter((r) => r.status === "pending");
   const reserved = (redemptions ?? [])
     .filter((r) => r.status === "pending" || r.status === "approved")
@@ -57,8 +68,8 @@ export default async function KidDashboard({ household }: { household: CurrentHo
             ? "You're all caught up — awesome job! 🎉"
             : `You have ${openChores.length} chore${openChores.length === 1 ? "" : "s"} waiting — go earn some stars!`}
         </p>
-        {(availablePoints > 0 || earned > 0) && (
-          <div className="mt-4 flex gap-4">
+        {(availablePoints > 0 || earned > 0 || pendingPoints > 0) && (
+          <div className="mt-4 flex flex-wrap gap-4">
             <div className="rounded-xl bg-white/15 px-4 py-2">
               <p className="text-xs uppercase tracking-wide text-teal-50">Up for grabs</p>
               <p className="text-xl font-bold">⭐ {availablePoints}</p>
@@ -67,6 +78,12 @@ export default async function KidDashboard({ household }: { household: CurrentHo
               <p className="text-xs uppercase tracking-wide text-teal-50">Balance</p>
               <p className="text-xl font-bold">🏆 {balance}</p>
             </div>
+            {pendingPoints > 0 && (
+              <div className="rounded-xl bg-white/15 px-4 py-2">
+                <p className="text-xs uppercase tracking-wide text-teal-50">Waiting for a grown-up</p>
+                <p className="text-xl font-bold">⏳ {pendingPoints}</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -114,7 +131,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
                       .join(" · ")}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   {chore.points > 0 && (
                     <span className="rounded-full bg-yellow-100 px-3 py-1 text-sm font-bold text-yellow-800">
                       ⭐ {chore.points}
@@ -122,14 +139,35 @@ export default async function KidDashboard({ household }: { household: CurrentHo
                   )}
                   <form action={completeChore}>
                     <input type="hidden" name="id" value={chore.id} />
-                    <input type="hidden" name="frequency" value={chore.frequency} />
                     <button className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-bold text-white hover:bg-teal-600">
                       Done! ✅
+                    </button>
+                  </form>
+                  <form action={skipChore}>
+                    <input type="hidden" name="id" value={chore.id} />
+                    <button
+                      title="Only did part of it? Skip earns 0 points but clears it for now."
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-400 hover:bg-slate-50"
+                    >
+                      Skip
                     </button>
                   </form>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {!!upcomingChores.length && (
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-semibold text-slate-400">⏳ Coming up</p>
+            <div className="space-y-2">
+              {upcomingChores.map((chore) => (
+                <div key={chore.id} className="flex items-center justify-between rounded-xl bg-white/70 px-4 py-3 text-sm shadow-sm">
+                  <span className="font-medium text-slate-600">{chore.title}</span>
+                  <span className="text-xs text-slate-400">{chore.due_date ? `Available ${chore.due_date}` : ""}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
