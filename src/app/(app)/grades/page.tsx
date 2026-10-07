@@ -2,9 +2,11 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
-import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, weeklyStanding } from "@/lib/grades";
+import { format } from "date-fns";
+import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, round2, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import CheckinUploader from "./checkin-uploader";
+import { markGradeAwardPaid } from "./actions";
 import { CapEditor, ClosePlanButton, MissingCountEditor, NewPlanForm } from "./plan-forms";
 import ProgressList from "./progress-list";
 import CashOwed from "../chores/cash-owed";
@@ -55,6 +57,14 @@ export default async function GradesPage() {
         const name = nameById.get(plan.member_id) ?? "Student";
         const progress = buildProgress(state.baseline, state.latest);
         const weeklyCap = plan.weekly_cap ?? GRADE_RULES.weeklyCap;
+        // The latest report's payout, and anything still unpaid from before it.
+        const weeklyAwards = state.awards.filter((a) => a.kind === "weekly");
+        const latestReport = weeklyAwards.length ? weeklyAwards[weeklyAwards.length - 1] : null;
+        const earlierOwed = round2(
+          state.awards
+            .filter((a) => !a.paid_at && a.dollars > 0 && a.id !== latestReport?.id)
+            .reduce((sum, a) => sum + a.dollars, 0)
+        );
         const standing = weeklyStanding(progress, 0, weeklyCap);
         return (
           <Card key={plan.id} className="mb-6">
@@ -98,6 +108,42 @@ export default async function GradesPage() {
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
               <CapEditor planId={plan.id} cap={plan.cash_cap} weeklyCap={weeklyCap} />
               {state.checkinCount > 0 && <ClosePlanButton planId={plan.id} />}
+            </div>
+
+            <div className="mt-4 rounded-lg bg-emerald-50 px-4 py-3">
+              {latestReport ? (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800">
+                      {latestReport.paid_at ? "Paid for this report" : "Owed for this report"}
+                      {latestReport.taken_on && (
+                        <span className="ml-2 text-xs font-normal text-slate-500">
+                          {format(new Date(`${latestReport.taken_on}T00:00:00`), "MMM d")}
+                        </span>
+                      )}
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-emerald-700">{formatMoney(latestReport.dollars)}</span>
+                      {!latestReport.paid_at && (
+                        <form action={markGradeAwardPaid}>
+                          <input type="hidden" name="id" value={latestReport.id} />
+                          <button className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700">
+                            Mark paid
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  </div>
+                  {latestReport.description && <p className="mt-1 text-xs text-slate-500">{latestReport.description}</p>}
+                  {earlierOwed > 0 && (
+                    <p className="mt-1 text-xs font-medium text-emerald-800">
+                      Plus {formatMoney(earlierOwed)} still unpaid from earlier reports.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-slate-600">Nothing owed yet. Upload a report and save it to see what you owe for it.</p>
+              )}
             </div>
           </Card>
         );
