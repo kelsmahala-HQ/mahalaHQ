@@ -106,6 +106,9 @@ export default async function GradesPage() {
             class.
           </li>
           <li>
+            Keep it up: ${GRADE_RULES.keepItUp} a week for each class that started at an A (90% or A-) and is still there.
+          </li>
+          <li>
             The most one kid can earn from a single week is ${GRADE_RULES.weeklyCap}. If a grade slips back, that class stops paying; there&rsquo;s
             nothing to take back.
           </li>

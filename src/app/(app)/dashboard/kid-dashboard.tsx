@@ -117,7 +117,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
             <ProgressList rows={gradeProgress} />
           </div>
           <p className="mt-2 px-1 text-xs text-slate-500">
-            You earn money every week your grades are above where they started. Quarter bonus: ${GRADE_RULES.cleanSheet} if
+            You earn money every week your grades are above where they started, or you&rsquo;re holding an A. Quarter bonus: ${GRADE_RULES.cleanSheet} if
             every class is a C or better
             {gradeProgress.filter((r) => r.underC).length > 0
               ? ` — ${gradeProgress.filter((r) => r.underC).length} to go.`

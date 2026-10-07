@@ -6,6 +6,7 @@
 export const GRADE_RULES = {
   perStep: 1, // dollars per step above where the class started the quarter, per week
   maxStepsPerClass: 4, // a class stops earning more after this many steps up
+  keepItUp: 1, // per class, per week: started at an A (A- / 90%) and still there
   weeklyCap: 10, // most one kid can earn from a single week's upload
   cleanSheet: 15, // quarter-end: every class at C or better
 } as const;
@@ -15,9 +16,9 @@ export const GRADE_RULES = {
 const LETTERS = ["F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"];
 
 type Scale = "percent" | "letter";
-const THRESHOLDS: Record<Scale, { pass: number; clean: number; max: number }> = {
-  percent: { pass: 12, clean: 14, max: 20 }, // 60% (passing), C = 70%, 100%
-  letter: { pass: 1, clean: 5, max: 12 }, // D- (passing), C, A+
+const THRESHOLDS: Record<Scale, { pass: number; clean: number; top: number; max: number }> = {
+  percent: { pass: 12, clean: 14, top: 18, max: 20 }, // 60% (passing), C = 70%, A = 90%, 100%
+  letter: { pass: 1, clean: 5, top: 10, max: 12 }, // D- (passing), C, A-, A+
 };
 
 export type Level = { level: number; scale: Scale };
@@ -79,6 +80,9 @@ export function buildProgress(baseline: Map<string, ClassGrade>, latest: Map<str
 
     const t = THRESHOLDS[nowLevel.scale];
     const steps = Math.min(stepsUp(thenLevel, nowLevel), GRADE_RULES.maxStepsPerClass);
+    // "Keep it up": a class that started at an A and is still at an A. It can't climb much
+    // further, so this is what makes holding a top grade worth something.
+    const keepingA = thenLevel.level >= t.top && nowLevel.level >= t.top;
     const target = Math.max(nowLevel.level, thenLevel.level) + 1;
     const canEarnMore = steps < GRADE_RULES.maxStepsPerClass && target <= t.max;
 
@@ -89,7 +93,7 @@ export function buildProgress(baseline: Map<string, ClassGrade>, latest: Map<str
       trend: nowLevel.level > thenLevel.level ? "up" : nowLevel.level < thenLevel.level ? "down" : "same",
       failing: nowLevel.level < t.pass,
       underC: nowLevel.level < t.clean,
-      weeklyDollars: steps * GRADE_RULES.perStep,
+      weeklyDollars: steps * GRADE_RULES.perStep + (keepingA ? GRADE_RULES.keepItUp : 0),
       next: canEarnMore ? { label: `Reach ${levelLabel(nowLevel.scale, target)}`, dollars: GRADE_RULES.perStep } : null,
     });
   }
