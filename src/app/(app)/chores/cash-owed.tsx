@@ -41,7 +41,7 @@ export default async function CashOwed({ householdId, hideWhenEmpty = false }: {
       .limit(8),
     supabase
       .from("grade_awards")
-      .select("id, member_id, description, dollars, taken_on, created_at")
+      .select("*")
       .eq("household_id", householdId)
       .gt("dollars", 0)
       .is("paid_at", null)
@@ -58,7 +58,8 @@ export default async function CashOwed({ householdId, hideWhenEmpty = false }: {
   ]);
 
   const owed: Item[] = [
-    ...(owedGrades ?? []).map((g) => ({
+    // Held pay (she's over the stay-in limit) and forfeited pay aren't owed yet.
+    ...(owedGrades ?? []).filter((g) => !g.held && !g.forfeited).map((g) => ({
       key: `g-${g.id}`,
       kind: "grade" as const,
       id: g.id,

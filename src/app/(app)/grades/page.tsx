@@ -59,11 +59,11 @@ export default async function GradesPage() {
         const progress = buildProgress(state.baseline, state.latest);
         const weeklyCap = plan.weekly_cap ?? GRADE_RULES.weeklyCap;
         // The latest report's payout, and anything still unpaid from before it.
-        const weeklyAwards = state.awards.filter((a) => a.kind === "weekly");
+        const weeklyAwards = state.awards.filter((a) => a.kind === "weekly" && !a.forfeited);
         const latestReport = weeklyAwards.length ? weeklyAwards[weeklyAwards.length - 1] : null;
         const earlierOwed = round2(
           state.awards
-            .filter((a) => !a.paid_at && a.dollars > 0 && a.id !== latestReport?.id)
+            .filter((a) => !a.paid_at && !a.held && !a.forfeited && a.dollars > 0 && a.id !== latestReport?.id)
             .reduce((sum, a) => sum + a.dollars, 0)
         );
         const standing = weeklyStanding(progress, 0, weeklyCap);
@@ -74,7 +74,7 @@ export default async function GradesPage() {
                 {name} <span className="text-sm font-normal text-slate-400">· {plan.label}</span>
               </h2>
               <span className="text-sm font-medium text-slate-600">
-                {formatMoney(state.earnedDollars)} of ${plan.cash_cap} earned this quarter
+                {formatMoney(state.earnedDollars)} of ${plan.cash_cap} earned this quarter{state.heldDollars > 0 ? ` (${formatMoney(state.heldDollars)} on hold)` : ""}
               </span>
             </div>
 
@@ -118,7 +118,7 @@ export default async function GradesPage() {
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-800">
-                      {latestReport.paid_at ? "Paid for this report" : "Owed for this report"}
+                      {latestReport.paid_at ? "Paid for this report" : latestReport.held ? "Held for this report" : "Owed for this report"}
                       {latestReport.taken_on && (
                         <span className="ml-2 text-xs font-normal text-slate-500">
                           {format(new Date(`${latestReport.taken_on}T00:00:00`), "MMM d")}
@@ -127,7 +127,7 @@ export default async function GradesPage() {
                     </p>
                     <div className="flex items-center gap-3">
                       <span className="text-lg font-bold text-emerald-700">{formatMoney(latestReport.dollars)}</span>
-                      {!latestReport.paid_at && (
+                      {!latestReport.paid_at && !latestReport.held && (
                         <form action={markGradeAwardPaid}>
                           <input type="hidden" name="id" value={latestReport.id} />
                           <button className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700">
@@ -138,6 +138,12 @@ export default async function GradesPage() {
                     </div>
                   </div>
                   {latestReport.description && <p className="mt-1 text-xs text-slate-500">{latestReport.description}</p>}
+                  {state.heldDollars > 0 && (
+                    <p className="mt-1 text-xs font-medium text-amber-800">
+                      💰 {formatMoney(state.heldDollars)} is on hold. It becomes owed once she&rsquo;s back to {GRADE_RULES.maxBelowCMinus} or fewer classes
+                      below a C-, and is lost if the quarter closes first.
+                    </p>
+                  )}
                   {earlierOwed > 0 && (
                     <p className="mt-1 text-xs font-medium text-emerald-800">
                       Plus {formatMoney(earlierOwed)} still unpaid from earlier reports.
@@ -174,8 +180,9 @@ export default async function GradesPage() {
           </li>
           <li>When you close the quarter, ${GRADE_RULES.cleanSheet} more if every class is at a C or better.</li>
           <li>
-            House rule: more than {GRADE_RULES.maxBelowCMinus} classes below a C- and she doesn&rsquo;t go anywhere until it&rsquo;s back down. It&rsquo;s
-            shown on her card here and on her dashboard, and never changes the pay.
+            House rule: more than {GRADE_RULES.maxBelowCMinus} classes below a C- and she doesn&rsquo;t go anywhere until it&rsquo;s back down. While
+            she&rsquo;s over the limit, each week&rsquo;s pay is held. The first report that has her back under releases all of it; anything still held
+            when you close the quarter is lost.
           </li>
         </ul>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">

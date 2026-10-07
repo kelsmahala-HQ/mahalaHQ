@@ -18,6 +18,7 @@ type AwardDraft = {
   dollars: number;
   description: string;
   taken_on?: string;
+  held?: boolean;
 };
 
 function shiftDate(dateStr: string, days: number): string {
@@ -114,6 +115,7 @@ async function payAwards(
         description: d.description,
         dollars: d.dollars,
         points: 0,
+        ...(d.held ? { held: true } : {}),
       })),
       { onConflict: "plan_id,award_key", ignoreDuplicates: true }
     )
@@ -125,11 +127,14 @@ async function payAwards(
   const dollars = inserted.reduce((s, a) => s + a.dollars, 0);
   const lines = inserted.map((a) => descriptionByKey.get(a.award_key) ?? "Grades");
 
-  await sendPushToMember(supabase, plan.member_id, {
-    title: `📚 You earned ${formatMoney(dollars)} for your grades!`,
-    body: lines.slice(0, 3).join(" · ") + (lines.length > 3 ? ` · +${lines.length - 3} more` : ""),
-    url: "/dashboard",
-  });
+  // Held pay isn't hers yet, so don't tell her she earned it -- the stay-in notice covers that.
+  if (!drafts.some((d) => d.held)) {
+    await sendPushToMember(supabase, plan.member_id, {
+      title: `📚 You earned ${formatMoney(dollars)} for your grades!`,
+      body: lines.slice(0, 3).join(" · ") + (lines.length > 3 ? ` · +${lines.length - 3} more` : ""),
+      url: "/dashboard",
+    });
+  }
 
   return { dollars, lines, name };
 }
@@ -192,6 +197,7 @@ export async function saveGradeCheckin(
   // Every upload pays that week's standing: each class by its current grade, plus any missing
   // assignments turned in. A second upload inside the same 7 days only tops up to this week's
   // standing -- it can't pay the same week twice.
+  const groundedNow = groundedStatus(buildProgress(state.baseline, state.latest)).grounded;
   const drafts: AwardDraft[] = [];
   {
     // Compare against the most recent earlier check-in that had a number (this one is last).
@@ -216,6 +222,8 @@ export async function saveGradeCheckin(
         dollars,
         description: standing.description,
         taken_on: takenOn,
+        // Over the stay-in limit: the pay is earned but held until she's back under it.
+        held: groundedNow,
       });
     }
   }
@@ -225,6 +233,25 @@ export async function saveGradeCheckin(
     paid = await payAwards(supabase, household, plan, drafts);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Couldn't record the awards." };
+  }
+
+  // Back under the limit: everything that was being held becomes owed. (If the held columns
+  // aren't in the database yet, there's nothing held to release.)
+  let releasedDollars = 0;
+  if (!groundedNow) {
+    const { data: held, error: heldError } = await supabase
+      .from("grade_awards")
+      .select("id, dollars")
+      .eq("plan_id", plan.id)
+      .eq("held", true)
+      .eq("forfeited", false);
+    if (!heldError && held?.length) {
+      const { error: releaseError } = await supabase
+        .from("grade_awards")
+        .update({ held: false })
+        .in("id", held.map((h) => h.id));
+      if (!releaseError) releasedDollars = round2(held.reduce((sum, h) => sum + Number(h.dollars), 0));
+    }
   }
 
   const after = groundedStatus(buildProgress(state.baseline, state.latest));
@@ -255,10 +282,21 @@ export async function saveGradeCheckin(
     );
   }
 
+  if (releasedDollars > 0) {
+    groundedNote += ` 💰 ${formatMoney(releasedDollars)} that was being held is now owed.`;
+    await sendPushToMember(supabase, plan.member_id, {
+      title: `💰 ${formatMoney(releasedDollars)} released`,
+      body: "You're back under the limit, so the pay that was on hold is yours.",
+      url: "/dashboard",
+    });
+  }
+
   revalidateGrades();
   return {
     success: true,
-    message: paid.lines.length
+    message: paid.lines.length && groundedNow
+      ? `Held ${formatMoney(paid.dollars)} for ${paid.name} — she's over the limit, so it's released once she's back to ${after.limit} or fewer classes below a C-.${groundedNote}`
+      : paid.lines.length
       ? `You owe ${paid.name} ${formatMoney(paid.dollars)} for this week — ${paid.lines.join("; ")}${groundedNote}`
       : `Saved — nothing new to pay (this week was already paid, or the cap is reached).${groundedNote}`,
   };
@@ -292,6 +330,22 @@ export async function closeGradePlan(formData: FormData): Promise<{ error: strin
     return { error: e instanceof Error ? e.message : "Couldn't record the awards." };
   }
 
+  // Pay still being held when the quarter ends is gone.
+  let forfeitedDollars = 0;
+  const { data: stillHeld, error: stillHeldError } = await supabase
+    .from("grade_awards")
+    .select("id, dollars")
+    .eq("plan_id", plan.id)
+    .eq("held", true)
+    .eq("forfeited", false);
+  if (!stillHeldError && stillHeld?.length) {
+    const { error: forfeitError } = await supabase
+      .from("grade_awards")
+      .update({ forfeited: true })
+      .in("id", stillHeld.map((h) => h.id));
+    if (!forfeitError) forfeitedDollars = round2(stillHeld.reduce((sum, h) => sum + Number(h.dollars), 0));
+  }
+
   const { error } = await supabase
     .from("grade_plans")
     .update({ status: "closed", closed_at: new Date().toISOString() })
@@ -301,7 +355,11 @@ export async function closeGradePlan(formData: FormData): Promise<{ error: strin
   revalidateGrades();
   return {
     success: true,
-    message: paid.lines.length ? `Closed. You owe ${paid.name} another ${formatMoney(paid.dollars)} — ${paid.lines.join("; ")}` : "Closed — no quarter-end bonuses earned.",
+    message:
+      (paid.lines.length
+        ? `Closed. You owe ${paid.name} another ${formatMoney(paid.dollars)} — ${paid.lines.join("; ")}`
+        : "Closed — no quarter-end bonuses earned.") +
+      (forfeitedDollars > 0 ? ` ${formatMoney(forfeitedDollars)} that was still on hold is forfeited.` : ""),
   };
 }
 
@@ -329,29 +387,34 @@ export async function updateGradePlanCap(formData: FormData): Promise<{ error: s
   return { success: true };
 }
 
-/** Marks one owed grade payout as handed over, so it leaves the Cash to pay out list. */
+/** Marks one owed grade payout as handed over, so it leaves the Cash to pay out list. Held pay can't be paid. */
 export async function markGradeAwardPaid(formData: FormData) {
   const household = await requireAdult();
   const supabase = await createClient();
-  await supabase
-    .from("grade_awards")
-    .update({ paid_at: new Date().toISOString() })
-    .eq("id", formData.get("id") as string)
-    .eq("household_id", household.householdId)
-    .is("paid_at", null);
+  const id = formData.get("id") as string;
+
+  const { data: award } = await supabase.from("grade_awards").select("*").eq("id", id).eq("household_id", household.householdId).single();
+  if (!award || award.held || award.forfeited || award.paid_at) return;
+
+  await supabase.from("grade_awards").update({ paid_at: new Date().toISOString() }).eq("id", id);
   revalidateGrades();
 }
 
-/** Marks everything currently owed to one kid for grades as paid in one go. */
+/** Marks everything currently owed (not held) to one kid for grades as paid in one go. */
 export async function markAllGradeAwardsPaid(formData: FormData) {
   const household = await requireAdult();
   const supabase = await createClient();
-  await supabase
+
+  const { data: rows } = await supabase
     .from("grade_awards")
-    .update({ paid_at: new Date().toISOString() })
+    .select("*")
     .eq("member_id", formData.get("member_id") as string)
     .eq("household_id", household.householdId)
     .is("paid_at", null);
+  const ids = (rows ?? []).filter((r) => !r.held && !r.forfeited).map((r) => r.id);
+  if (!ids.length) return;
+
+  await supabase.from("grade_awards").update({ paid_at: new Date().toISOString() }).in("id", ids);
   revalidateGrades();
 }
 

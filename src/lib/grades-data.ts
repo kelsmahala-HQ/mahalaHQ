@@ -38,6 +38,8 @@ export async function loadPlanState(supabase: SupabaseClient, planId: string) {
     taken_on: string | null;
     description: string | null;
     paid_at: string | null;
+    held?: boolean;
+    forfeited?: boolean;
     dollars: number;
     points: number;
     created_at: string;
@@ -53,7 +55,10 @@ export async function loadPlanState(supabase: SupabaseClient, planId: string) {
     ...baselineAndLatest(sorted),
     awards: awardRows.map((a) => ({ ...a, dollars: Number(a.dollars) })),
     awardedKeys: new Set(awardRows.map((a) => a.award_key)),
-    earnedDollars: round2(awardRows.reduce((sum, a) => sum + Number(a.dollars), 0)),
+    // Forfeited (held, then the quarter closed) never counts. Held counts against the cap -- it's
+    // earned, just not handed over yet -- but isn't "released" until she's back under the limit.
+    earnedDollars: round2(awardRows.filter((a) => !a.forfeited).reduce((sum, a) => sum + Number(a.dollars), 0)),
+    heldDollars: round2(awardRows.filter((a) => a.held && !a.forfeited).reduce((sum, a) => sum + Number(a.dollars), 0)),
     paidDollars: round2(awardRows.filter((a) => a.paid_at).reduce((sum, a) => sum + Number(a.dollars), 0)),
   };
 }

@@ -348,6 +348,8 @@ create table if not exists grade_awards (
   taken_on date, -- the check-in date a weekly award was paid for
   description text, -- e.g. 'Weekly grades: American History +$4, Health +$1'
   paid_at timestamptz, -- null = still owed; stamped when you hand over the money
+  held boolean not null default false, -- earned while over the stay-in limit; owed once she's back under it
+  forfeited boolean not null default false, -- still held when the quarter closed, so never owed
   dollars numeric(8,2) not null,
   points integer not null,
   created_at timestamptz not null default now(),
@@ -358,6 +360,8 @@ create table if not exists grade_awards (
 alter table grade_awards add column if not exists taken_on date;
 alter table grade_awards add column if not exists description text;
 alter table grade_awards add column if not exists paid_at timestamptz;
+alter table grade_awards add column if not exists held boolean not null default false;
+alter table grade_awards add column if not exists forfeited boolean not null default false;
 do $$
 begin
   if exists (select 1 from pg_constraint where conname = 'grade_awards_kind_check') then

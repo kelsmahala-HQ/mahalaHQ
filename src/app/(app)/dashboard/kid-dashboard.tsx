@@ -111,10 +111,16 @@ export default async function KidDashboard({ household }: { household: CurrentHo
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-lg font-bold text-slate-900">📚 Your Grades</h2>
             <span className="text-sm font-medium text-teal-700">
-              {formatMoney(weeklyStanding(gradeProgress, 0, gradePlan.weekly_cap ?? GRADE_RULES.weeklyCap).dollars)} a week right now · {formatMoney(gradeState.earnedDollars)} earned so far
+              {formatMoney(weeklyStanding(gradeProgress, 0, gradePlan.weekly_cap ?? GRADE_RULES.weeklyCap).dollars)} a week right now · {formatMoney(gradeState.earnedDollars - gradeState.heldDollars)} earned so far
             </span>
           </div>
           <GroundedBanner status={groundedStatus(gradeProgress)} name={household.displayName} audience="kid" />
+          {gradeState.heldDollars > 0 && (
+            <p className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">
+              💰 {formatMoney(gradeState.heldDollars)} is on hold. You get it as soon as you&rsquo;re back to {GRADE_RULES.maxBelowCMinus} or fewer
+              classes below a C-.
+            </p>
+          )}
           <div className="rounded-2xl border-2 border-teal-100 bg-white p-3 shadow-sm">
             <ProgressList rows={gradeProgress} />
           </div>
