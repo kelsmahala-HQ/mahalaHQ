@@ -16,6 +16,24 @@ export type ChoreInitial = {
   creditWhoeverCompletes?: boolean;
 };
 
+function sameMembers(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((id) => set.has(id));
+}
+
+/**
+ * By default who can claim a chore just mirrors who it's assigned to (assign it to Luke only ->
+ * only Luke sees it; assign it to nobody -> it's open to everyone). "Custom access" is only for
+ * the exception: a chore assigned to Luke that others can also pinch-hit on, or a chore with no
+ * assignee that's still limited to a few people (Clean Porch). We only need to show that second
+ * picker when the chore is actually in that exception state.
+ */
+function hasCustomEligibility(assignedIds: string[], eligibleIds: string[]): boolean {
+  if (eligibleIds.length === 0) return assignedIds.length > 0; // "everyone" despite having an assignee is a deliberate override
+  return !sameMembers(assignedIds, eligibleIds);
+}
+
 export default function AddChoreForm({
   members,
   initial,
@@ -30,7 +48,10 @@ export default function AddChoreForm({
   onSaved?: () => void;
 }) {
   const [frequency, setFrequency] = useState(initial?.frequency ?? "weekly");
-  const [restrictEligibility, setRestrictEligibility] = useState((initial?.eligibleMemberIds?.length ?? 0) > 0);
+  const [customEligibility, setCustomEligibility] = useState(
+    hasCustomEligibility(initial?.assignedMemberIds ?? [], initial?.eligibleMemberIds ?? [])
+  );
+  const [anyoneEligible, setAnyoneEligible] = useState((initial?.eligibleMemberIds?.length ?? 0) === 0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -52,7 +73,8 @@ export default function AddChoreForm({
       if (!choreId) {
         form.reset();
         setFrequency("weekly");
-        setRestrictEligibility(false);
+        setCustomEligibility(false);
+        setAnyoneEligible(true);
       }
       onSaved?.();
     }
@@ -64,7 +86,7 @@ export default function AddChoreForm({
       <input name="title" required defaultValue={initial?.title} placeholder="Chore (e.g. Take out trash)" className={inputClass} />
       <div className="sm:col-span-2">
         <label className="mb-1 block text-xs font-medium text-slate-500">
-          Whose chore is this? (assignment — they get the reminder; leave blank for none)
+          Who does this chore? (leave everyone unchecked for an open chore anyone in the house can do)
         </label>
         <div className="flex flex-wrap gap-3">
           {members?.map((m) => (
@@ -80,6 +102,9 @@ export default function AddChoreForm({
             </label>
           ))}
         </div>
+        <p className="mt-0.5 text-xs text-slate-400">
+          Only the people picked here can see it and mark it done — unless you turn on custom access below.
+        </p>
         <label className="mt-2 flex items-center gap-1.5 text-sm text-slate-700">
           <input
             type="checkbox"
@@ -94,37 +119,62 @@ export default function AddChoreForm({
           every time.
         </p>
       </div>
+
       <div className="sm:col-span-2">
-        <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-          <input
-            type="checkbox"
-            checked={!restrictEligibility}
-            onChange={(e) => setRestrictEligibility(!e.target.checked)}
-            className="accent-teal-600"
-          />
-          Anyone can do this chore
-        </label>
-        <p className="mt-0.5 text-xs text-slate-400">
-          Uncheck to limit who&rsquo;s allowed to claim it — e.g. &ldquo;Mow the lawn&rdquo; only shows for Luke, or
-          &ldquo;Clean porch&rdquo; shows for a few people and the first to finish it earns the points.
-        </p>
-        {restrictEligibility && (
-          <div className="mt-2 flex flex-wrap gap-3">
-            {members?.map((m) => (
-              <label key={m.id} className="flex items-center gap-1.5 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  name="eligible_member_id"
-                  value={m.id}
-                  defaultChecked={selectedEligibleIds.has(m.id)}
-                  className="accent-teal-600"
-                />
-                {m.display_name}
-              </label>
-            ))}
+        {!customEligibility ? (
+          <button
+            type="button"
+            onClick={() => setCustomEligibility(true)}
+            className="text-xs font-medium text-teal-600 hover:text-teal-500"
+          >
+            + Let different people claim this
+          </button>
+        ) : (
+          <div className="rounded-lg border border-slate-200 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium text-slate-600">Who can actually claim it (independent of who it&rsquo;s assigned to)</p>
+              <button
+                type="button"
+                onClick={() => setCustomEligibility(false)}
+                className="text-xs font-medium text-slate-400 hover:text-slate-600"
+              >
+                Match assignment
+              </button>
+            </div>
+            <input type="hidden" name="eligibility_mode" value="custom" />
+            <label className="mb-2 flex items-center gap-1.5 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={anyoneEligible}
+                onChange={(e) => setAnyoneEligible(e.target.checked)}
+                className="accent-teal-600"
+              />
+              Anyone in the house
+            </label>
+            {!anyoneEligible && (
+              <div className="flex flex-wrap gap-3">
+                {members?.map((m) => (
+                  <label key={m.id} className="flex items-center gap-1.5 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      name="eligible_member_id"
+                      value={m.id}
+                      defaultChecked={selectedEligibleIds.has(m.id)}
+                      className="accent-teal-600"
+                    />
+                    {m.display_name}
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-slate-400">
+              E.g. &ldquo;Mow the lawn&rdquo; is assigned to Luke but Kelsey can pinch-hit too; or &ldquo;Clean
+              porch&rdquo; has no assignee and is just open to a couple of people, first to finish it gets the points.
+            </p>
           </div>
         )}
       </div>
+
       <select name="frequency" className={inputClass} value={frequency} onChange={(e) => setFrequency(e.target.value)}>
         <option value="once">One-time</option>
         <option value="daily">Daily</option>

@@ -11,7 +11,12 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
   const household = await requireHousehold();
   const supabase = await createClient();
   const assignedMemberIds = (formData.getAll("assigned_member_id") as string[]).filter(Boolean);
-  const eligibleMemberIds = (formData.getAll("eligible_member_id") as string[]).filter(Boolean);
+  // Eligibility mirrors assignment by default (assign it to Luke -> only Luke can claim it;
+  // assign nobody -> everyone can). "custom" mode is the one form field for the exception --
+  // different or additional people than whoever it's assigned to.
+  const eligibilityMode = formData.get("eligibility_mode") as string | null;
+  const eligibleMemberIds =
+    eligibilityMode === "custom" ? (formData.getAll("eligible_member_id") as string[]).filter(Boolean) : assignedMemberIds;
 
   let assignedNames: string[] = [];
   if (assignedMemberIds.length) {
@@ -59,7 +64,6 @@ export async function addChore(formData: FormData): Promise<{ error: string } | 
     }
   }
 
-  // Eligibility is separate from assignment: no rows = everyone can claim it.
   if (eligibleMemberIds.length) {
     const { error: eligError } = await supabase
       .from("chore_eligibility")
@@ -81,7 +85,9 @@ export async function updateChore(formData: FormData): Promise<{ error: string }
   if (!title) return { error: "Name the chore." };
 
   const assignedMemberIds = (formData.getAll("assigned_member_id") as string[]).filter(Boolean);
-  const eligibleMemberIds = (formData.getAll("eligible_member_id") as string[]).filter(Boolean);
+  const eligibilityMode = formData.get("eligibility_mode") as string | null;
+  const eligibleMemberIds =
+    eligibilityMode === "custom" ? (formData.getAll("eligible_member_id") as string[]).filter(Boolean) : assignedMemberIds;
   const frequency = (formData.get("frequency") as string) || "once";
   const daysOfWeek = (formData.getAll("days_of_week") as string[]).map(Number).filter((n) => !Number.isNaN(n));
   const creditWhoeverCompletes = formData.get("credit_whoever_completes") === "on";

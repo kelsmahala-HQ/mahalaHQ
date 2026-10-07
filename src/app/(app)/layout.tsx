@@ -2,6 +2,7 @@ import { requireHousehold } from "@/lib/household";
 import SignOutButton from "./sign-out-button";
 import MobileNav from "./mobile-nav";
 import DesktopSidebar from "./desktop-sidebar";
+import AutoRefresh from "./auto-refresh";
 import { navGroupsForRole } from "./nav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -11,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-slate-50">
+      <AutoRefresh />
       <DesktopSidebar
         navGroups={navGroups}
         showManagement={showManagement}
