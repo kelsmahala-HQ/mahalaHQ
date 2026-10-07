@@ -1,19 +1,22 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
-import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
+import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
 import { GRADE_RULES, buildProgress, cleanSheetLabel, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import CheckinUploader from "./checkin-uploader";
 import { CapEditor, ClosePlanButton, NewPlanForm } from "./plan-forms";
 import ProgressList from "./progress-list";
 import CashOwed from "../chores/cash-owed";
+import AddRewardForm from "../chores/add-reward-form";
+import { deleteReward } from "../chores/rewards-actions";
+import { balanceFor } from "@/lib/points";
 
 export default async function GradesPage() {
   const household = await requireAdult();
   const supabase = await createClient();
 
-  const [{ data: members }, { data: plans }] = await Promise.all([
+  const [{ data: members }, { data: plans }, { data: allRewards }, { data: completions }, { data: redemptions }] = await Promise.all([
     supabase
       .from("household_members")
       .select("id, display_name, role")
@@ -21,7 +24,19 @@ export default async function GradesPage() {
       .neq("role", "sitter")
       .order("display_name"),
     supabase.from("grade_plans").select("*").eq("household_id", household.householdId).order("created_at", { ascending: false }),
+    supabase.from("rewards").select("*").eq("household_id", household.householdId).order("cost"),
+    supabase.from("chore_completions").select("member_id, points, approval_status, kind").eq("household_id", household.householdId),
+    supabase.from("reward_redemptions").select("member_id, cost, status, source").eq("household_id", household.householdId),
   ]);
+
+  // Grade points are their own currency, spent only in the grade rewards store below.
+  const gradeRewards = (allRewards ?? []).filter((r) => r.source === "grades");
+  const gradeBalanceFor = (memberId: string) =>
+    balanceFor(
+      "grades",
+      (completions ?? []).filter((c) => c.member_id === memberId),
+      (redemptions ?? []).filter((r) => r.member_id === memberId)
+    );
 
   const nameById = new Map((members ?? []).map((m) => [m.id, m.display_name]));
   const activePlans = (plans ?? []).filter((p) => p.status === "active");
@@ -62,7 +77,7 @@ export default async function GradesPage() {
                 {name} <span className="text-sm font-normal text-slate-400">· {plan.label}</span>
               </h2>
               <span className="text-sm font-medium text-slate-600">
-                ${state.earnedDollars} of ${plan.cash_cap} earned · ⭐ {state.earnedPoints}
+                ${state.earnedDollars} of ${plan.cash_cap} earned · ⭐ {state.earnedPoints} · balance ⭐ {gradeBalanceFor(plan.member_id)}
               </span>
             </div>
 
@@ -90,6 +105,34 @@ export default async function GradesPage() {
       })}
 
       {!activePlans.length && <EmptyState message="No active grade plans yet — start one below." />}
+
+      <Card className="mb-6">
+        <h2 className="mb-1 text-sm font-semibold text-slate-700">📚 Grade rewards</h2>
+        <p className="mb-3 text-xs text-slate-400">
+          What grade points can buy. These are separate from the chore rewards — grade points only work here, and chore points only work
+          there. A reward with a cash value shows up under Cash to pay out once you approve it.
+        </p>
+        <AddRewardForm audience="kid" source="grades" />
+        {!!gradeRewards.length && (
+          <div className="mt-4 space-y-1">
+            {gradeRewards.map((r) => (
+              <div key={r.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-sm text-slate-900">{r.name}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-slate-500">
+                    ⭐ {r.cost}
+                    {r.cash_value ? ` · 💵 $${r.cash_value}` : ""}
+                  </span>
+                  <form action={deleteReward}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <button className={iconButtonClass}>Remove</button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {!!membersWithoutPlan.length && (
         <CollapsibleCard title="Start a grade plan" className="mb-6">

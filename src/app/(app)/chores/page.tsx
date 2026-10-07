@@ -16,6 +16,7 @@ import AddRewardForm from "./add-reward-form";
 import ChoreRow from "./chore-row";
 import RedeemButton from "./redeem-button";
 import CashOwed from "./cash-owed";
+import { balanceFor } from "@/lib/points";
 
 function frequencyLabel(frequency: string, daysOfWeek: number[] | null) {
   return daysOfWeekLabel(daysOfWeek) ?? frequency;
@@ -75,45 +76,44 @@ export default async function ChoresPage() {
     (c) => upcoming(c, todayStr) || (canManage && c.frequency === "once" && c.status === "done")
   );
 
-  const kidRewards = (rewards ?? []).filter((r) => r.audience !== "adult");
-  const adultRewards = (rewards ?? []).filter((r) => r.audience === "adult");
+  // Grade rewards live on the Grades page -- chore points and grade points are separate currencies.
+  const kidRewards = (rewards ?? []).filter((r) => r.audience !== "adult" && r.source !== "grades");
+  const adultRewards = (rewards ?? []).filter((r) => r.audience === "adult" && r.source !== "grades");
   const ownPendingRewardIds = new Set(
     (pendingRedemptions ?? []).filter((r) => r.member_id === household.memberId).map((r) => r.reward_id)
   );
 
-  // Everyone's point standing (admin/adult view). Balance = approved chore points earned minus
-  // points already reserved by a pending or approved reward redemption -- same math the kid
-  // dashboard and the redemption check use. The signed-in adult's own balance falls out of this
-  // too, for the private Adult Rewards card.
-  const [{ data: allCompletions }, { data: allReserved }] = canManage
+  // Everyone's point standing (admin/adult view). Chore points and grade points are separate
+  // balances, each = approved points earned minus points reserved by a pending/approved redemption
+  // -- same math the kid dashboard and the redemption check use (src/lib/points.ts). The
+  // signed-in adult's own chore balance feeds the private Adult Rewards card.
+  const [{ data: allCompletions }, { data: allRedemptions }] = canManage
     ? await Promise.all([
         supabase
           .from("chore_completions")
-          .select("member_id, points, approval_status")
+          .select("member_id, points, approval_status, kind")
           .eq("household_id", household.householdId),
         supabase
           .from("reward_redemptions")
-          .select("member_id, cost")
-          .eq("household_id", household.householdId)
-          .in("status", ["pending", "approved"]),
+          .select("member_id, cost, status, source")
+          .eq("household_id", household.householdId),
       ])
-    : [{ data: [] as { member_id: string; points: number; approval_status: string }[] }, { data: [] as { member_id: string; cost: number }[] }];
-
-  const pointsByMember = new Map<string, { earned: number; pending: number; reserved: number }>();
-  const bucket = (id: string) => {
-    if (!pointsByMember.has(id)) pointsByMember.set(id, { earned: 0, pending: 0, reserved: 0 });
-    return pointsByMember.get(id)!;
-  };
-  for (const c of allCompletions ?? []) {
-    if (c.approval_status === "approved") bucket(c.member_id).earned += c.points;
-    else if (c.approval_status === "pending") bucket(c.member_id).pending += c.points;
-  }
-  for (const r of allReserved ?? []) bucket(r.member_id).reserved += r.cost;
+    : [
+        { data: [] as { member_id: string; points: number; approval_status: string; kind: string }[] },
+        { data: [] as { member_id: string; cost: number; status: string; source: string | null }[] },
+      ];
 
   const standings = (members ?? [])
     .map((m) => {
-      const b = pointsByMember.get(m.id) ?? { earned: 0, pending: 0, reserved: 0 };
-      return { id: m.id, name: m.display_name, balance: b.earned - b.reserved, pending: b.pending };
+      const completions = (allCompletions ?? []).filter((c) => c.member_id === m.id);
+      const redemptions = (allRedemptions ?? []).filter((r) => r.member_id === m.id);
+      return {
+        id: m.id,
+        name: m.display_name,
+        balance: balanceFor("chores", completions, redemptions),
+        gradeBalance: balanceFor("grades", completions, redemptions),
+        pending: completions.filter((c) => c.approval_status === "pending").reduce((sum, c) => sum + c.points, 0),
+      };
     })
     .sort((a, z) => z.balance - a.balance || a.name.localeCompare(z.name));
 
@@ -232,7 +232,11 @@ export default async function ChoresPage() {
               <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2">
                 <p className="text-sm text-slate-900">
                   <span className="font-medium">{memberNameById.get(r.member_id) ?? "Someone"}</span> wants{" "}
-                  <span className="font-medium">{r.reward_name}</span> <span className="text-slate-400">(⭐ {r.cost})</span>
+                  <span className="font-medium">{r.reward_name}</span>{" "}
+                  <span className="text-slate-400">
+                    (⭐ {r.cost}
+                    {r.source === "grades" ? " · 📚 grades" : ""})
+                  </span>
                 </p>
                 <div className="flex gap-2">
                   <form action={approveRedemption}>
@@ -282,14 +286,15 @@ export default async function ChoresPage() {
                 <span className="text-sm font-medium text-slate-900">{s.name}</span>
                 <span className="flex items-baseline gap-2">
                   <span className="text-sm font-semibold text-slate-700">🏆 {s.balance}</span>
+                  {s.gradeBalance !== 0 && <span className="text-sm font-semibold text-slate-700">📚 {s.gradeBalance}</span>}
                   {s.pending > 0 && <span className="text-xs text-amber-600">+{s.pending} pending</span>}
                 </span>
               </div>
             ))}
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            Balance = approved chore points earned, minus points already promised to a reward that&rsquo;s been
-            requested or approved.
+            🏆 chore points, 📚 grade points — each is approved points earned, minus points already promised to a reward that&rsquo;s
+            been requested or approved.
           </p>
         </Card>
       )}

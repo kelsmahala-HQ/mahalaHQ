@@ -401,6 +401,11 @@ alter table rewards add column if not exists cash_value integer check (cash_valu
 alter table reward_redemptions add column if not exists cash_value integer;
 alter table reward_redemptions add column if not exists paid_at timestamptz;
 
+-- Chore points and grade points are separate currencies with separate rewards stores. source says
+-- which store a reward belongs to (and which store a redemption was spent in).
+alter table rewards add column if not exists source text not null default 'chores' check (source in ('chores', 'grades'));
+alter table reward_redemptions add column if not exists source text not null default 'chores' check (source in ('chores', 'grades'));
+
 -- ============================================================================
 -- House maintenance
 -- ============================================================================

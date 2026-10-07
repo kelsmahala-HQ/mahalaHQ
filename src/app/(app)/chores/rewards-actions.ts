@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult, requireHousehold } from "@/lib/household";
 import { sendPushToManagers, sendPushToMember } from "@/lib/push";
+import { balanceFor, type PointSource } from "@/lib/points";
 
 function revalidateRewards() {
   revalidatePath("/chores");
@@ -23,6 +24,7 @@ export async function addReward(formData: FormData): Promise<{ error: string } |
 
   const audience = (formData.get("audience") as string) === "adult" ? "adult" : "kid";
 
+  const source: PointSource = (formData.get("source") as string) === "grades" ? "grades" : "chores";
   const cashValue = Number(formData.get("cash_value"));
 
   const { error } = await supabase.from("rewards").insert({
@@ -30,6 +32,7 @@ export async function addReward(formData: FormData): Promise<{ error: string } |
     name: formData.get("name") as string,
     cost: Number(formData.get("cost")),
     audience,
+    source,
     cash_value: Number.isInteger(cashValue) && cashValue > 0 ? cashValue : null,
   });
 
@@ -52,16 +55,15 @@ export async function requestRedemption(formData: FormData): Promise<{ error: st
   const supabase = await createClient();
   const rewardId = formData.get("reward_id") as string;
 
-  const { data: reward } = await supabase.from("rewards").select("id, name, cost, cash_value").eq("id", rewardId).single();
+  const { data: reward } = await supabase.from("rewards").select("id, name, cost, cash_value, source").eq("id", rewardId).single();
   if (!reward) return { error: "That reward no longer exists." };
 
+  const source: PointSource = reward.source === "grades" ? "grades" : "chores";
   const [{ data: completions }, { data: redemptions }] = await Promise.all([
-    supabase.from("chore_completions").select("points").eq("member_id", household.memberId).eq("approval_status", "approved"),
-    supabase.from("reward_redemptions").select("cost").eq("member_id", household.memberId).in("status", ["pending", "approved"]),
+    supabase.from("chore_completions").select("points, approval_status, kind").eq("member_id", household.memberId),
+    supabase.from("reward_redemptions").select("cost, status, source").eq("member_id", household.memberId),
   ]);
-  const earned = (completions ?? []).reduce((sum, c) => sum + c.points, 0);
-  const reserved = (redemptions ?? []).reduce((sum, r) => sum + r.cost, 0);
-  const balance = earned - reserved;
+  const balance = balanceFor(source, completions ?? [], redemptions ?? []);
 
   if (balance < reward.cost) return { error: "Not enough points yet." };
 
@@ -71,6 +73,7 @@ export async function requestRedemption(formData: FormData): Promise<{ error: st
     reward_name: reward.name,
     member_id: household.memberId,
     cost: reward.cost,
+    source,
     cash_value: reward.cash_value,
   });
 

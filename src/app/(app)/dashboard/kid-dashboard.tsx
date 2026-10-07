@@ -10,6 +10,7 @@ import RedeemButton from "../chores/redeem-button";
 import ProgressList from "../grades/progress-list";
 import { GRADE_RULES, buildProgress, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
+import { balanceFor } from "@/lib/points";
 
 export default async function KidDashboard({ household }: { household: CurrentHousehold }) {
   const supabase = await createClient();
@@ -23,7 +24,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
         .eq("household_id", household.householdId)
         .order("due_date", { nullsFirst: false }),
       supabase.from("chore_eligibility").select("chore_id, member_id").eq("household_id", household.householdId),
-      supabase.from("chore_completions").select("points, approval_status").eq("member_id", household.memberId),
+      supabase.from("chore_completions").select("points, approval_status, kind").eq("member_id", household.memberId),
       supabase.from("rewards").select("*").eq("household_id", household.householdId).eq("audience", "kid").order("cost"),
       supabase.from("reward_redemptions").select("*").eq("member_id", household.memberId).order("requested_at", { ascending: false }),
     ]);
@@ -39,17 +40,18 @@ export default async function KidDashboard({ household }: { household: CurrentHo
   const upcomingChores = myChores.filter((c) => upcoming(c, todayStr));
   const availablePoints = openChores.reduce((sum, c) => sum + (c.points ?? 0), 0);
 
+  // Chore points and grade points are separate currencies, each with its own rewards store.
+  const choreBalance = balanceFor("chores", completions ?? [], redemptions ?? []);
+  const gradeBalance = balanceFor("grades", completions ?? [], redemptions ?? []);
   const earned = (completions ?? [])
-    .filter((c) => c.approval_status === "approved")
+    .filter((c) => c.approval_status === "approved" && c.kind !== "grade")
     .reduce((sum, c) => sum + c.points, 0);
   const pendingPoints = (completions ?? [])
     .filter((c) => c.approval_status === "pending")
     .reduce((sum, c) => sum + c.points, 0);
   const pendingRedemptions = (redemptions ?? []).filter((r) => r.status === "pending");
-  const reserved = (redemptions ?? [])
-    .filter((r) => r.status === "pending" || r.status === "approved")
-    .reduce((sum, r) => sum + r.cost, 0);
-  const balance = earned - reserved;
+  const choreRewards = (rewards ?? []).filter((r) => r.source !== "grades");
+  const gradeRewards = (rewards ?? []).filter((r) => r.source === "grades");
   const pendingRewardIds = new Set(pendingRedemptions.map((r) => r.reward_id));
 
   // Their own grade plan, if a parent has started one -- progress on every class plus the
@@ -84,16 +86,22 @@ export default async function KidDashboard({ household }: { household: CurrentHo
             ? "You're all caught up — awesome job! 🎉"
             : `You have ${openChores.length} chore${openChores.length === 1 ? "" : "s"} waiting — go earn some stars!`}
         </p>
-        {(availablePoints > 0 || earned > 0 || pendingPoints > 0) && (
+        {(availablePoints > 0 || earned > 0 || pendingPoints > 0 || gradeBalance > 0) && (
           <div className="mt-4 flex flex-wrap gap-4">
             <div className="rounded-xl bg-white/15 px-4 py-2">
               <p className="text-xs uppercase tracking-wide text-teal-50">Up for grabs</p>
               <p className="text-xl font-bold">⭐ {availablePoints}</p>
             </div>
             <div className="rounded-xl bg-white/15 px-4 py-2">
-              <p className="text-xs uppercase tracking-wide text-teal-50">Balance</p>
-              <p className="text-xl font-bold">🏆 {balance}</p>
+              <p className="text-xs uppercase tracking-wide text-teal-50">Chore points</p>
+              <p className="text-xl font-bold">🏆 {choreBalance}</p>
             </div>
+            {(gradeBalance > 0 || gradePlan) && (
+              <div className="rounded-xl bg-white/15 px-4 py-2">
+                <p className="text-xs uppercase tracking-wide text-teal-50">Grade points</p>
+                <p className="text-xl font-bold">📚 {gradeBalance}</p>
+              </div>
+            )}
             {pendingPoints > 0 && (
               <div className="rounded-xl bg-white/15 px-4 py-2">
                 <p className="text-xs uppercase tracking-wide text-teal-50">Waiting for a grown-up</p>
@@ -125,11 +133,11 @@ export default async function KidDashboard({ household }: { household: CurrentHo
         </div>
       )}
 
-      {!!rewards?.length && (
+      {!!gradeRewards.length && (
         <div className="mb-6">
-          <h2 className="mb-3 text-lg font-bold text-slate-900">🎁 Rewards</h2>
+          <h2 className="mb-3 text-lg font-bold text-slate-900">📚 Grade Rewards</h2>
           <div className="grid grid-cols-2 gap-3">
-            {rewards.map((r) => (
+            {gradeRewards.map((r) => (
               <div key={r.id} className="rounded-2xl border-2 border-teal-100 bg-white p-4 shadow-sm">
                 <p className="text-sm font-semibold text-slate-900">{r.name}</p>
                 <p className="mb-2 mt-0.5 text-xs font-medium text-teal-700">
@@ -141,7 +149,31 @@ export default async function KidDashboard({ household }: { household: CurrentHo
                     Waiting for approval
                   </button>
                 ) : (
-                  <RedeemButton rewardId={r.id} canAfford={balance >= r.cost} />
+                  <RedeemButton rewardId={r.id} canAfford={gradeBalance >= r.cost} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!!choreRewards.length && (
+        <div className="mb-6">
+          <h2 className="mb-3 text-lg font-bold text-slate-900">🎁 Chore Rewards</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {choreRewards.map((r) => (
+              <div key={r.id} className="rounded-2xl border-2 border-teal-100 bg-white p-4 shadow-sm">
+                <p className="text-sm font-semibold text-slate-900">{r.name}</p>
+                <p className="mb-2 mt-0.5 text-xs font-medium text-teal-700">
+                  ⭐ {r.cost}
+                  {r.cash_value ? ` · 💵 $${r.cash_value}` : ""}
+                </p>
+                {pendingRewardIds.has(r.id) ? (
+                  <button disabled className="w-full rounded-xl bg-slate-100 py-2 text-xs font-bold text-slate-400">
+                    Waiting for approval
+                  </button>
+                ) : (
+                  <RedeemButton rewardId={r.id} canAfford={choreBalance >= r.cost} />
                 )}
               </div>
             ))}
