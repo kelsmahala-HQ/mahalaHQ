@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
-import { closeGradePlan, createGradePlan, updateGradePlanCap } from "./actions";
+import { closeGradePlan, createGradePlan, setLatestMissingCount, updateGradePlanCap } from "./actions";
 
 export function NewPlanForm({ members }: { members: { id: string; display_name: string }[] }) {
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +123,48 @@ export function CapEditor({ planId, cap }: { planId: string; cap: number }) {
       <button type="button" onClick={() => setEditing(false)} className="text-xs text-slate-500 hover:text-slate-700">
         Cancel
       </button>
+      {error && <span className="text-sm text-red-600">{error}</span>}
+    </form>
+  );
+}
+
+/** Where the current missing-assignments total lives between uploads: set it here to add or fix it without paying anything. */
+export function MissingCountEditor({ planId, current }: { planId: string; current: number | null }) {
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const result = await setLatestMissingCount(new FormData(e.currentTarget));
+    if ("error" in result) setError(result.error);
+    else setEditing(false);
+  }
+
+  if (!editing) {
+    return (
+      <p className="text-sm text-slate-600">
+        Missing assignments:{" "}
+        <span className="font-semibold text-slate-800">{current === null ? "not entered yet" : current}</span>{" "}
+        <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-teal-600 hover:text-teal-500">
+          {current === null ? "Enter the number now" : "Change"}
+        </button>
+      </p>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2 text-sm">
+      <input type="hidden" name="plan_id" value={planId} />
+      <span className="text-slate-600">Missing right now, all classes:</span>
+      <input name="missing_count" type="number" min={0} defaultValue={current ?? undefined} required className={`${inputClass} !w-24`} />
+      <button type="submit" className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700">
+        Save
+      </button>
+      <button type="button" onClick={() => setEditing(false)} className="text-xs text-slate-500 hover:text-slate-700">
+        Cancel
+      </button>
+      <span className="text-xs text-slate-400">Doesn&rsquo;t pay anything — it&rsquo;s the number next week&rsquo;s drop is measured from.</span>
       {error && <span className="text-sm text-red-600">{error}</span>}
     </form>
   );

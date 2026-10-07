@@ -314,3 +314,35 @@ export async function markAllGradeAwardsPaid(formData: FormData) {
     .is("paid_at", null);
   revalidateGrades();
 }
+
+/**
+ * Sets the current missing-assignments total on the most recent check-in without paying anything
+ * -- for adding the starting number to a check-in saved before the box existed, or correcting a
+ * typo. Next upload's drop is measured against this number.
+ */
+export async function setLatestMissingCount(formData: FormData): Promise<{ error: string } | { success: true }> {
+  const household = await requireAdult();
+  const supabase = await createClient();
+
+  const missingCount = Number(formData.get("missing_count"));
+  if (!Number.isInteger(missingCount) || missingCount < 0) return { error: "Enter a whole number, like 3." };
+
+  const plan = await getActivePlan(supabase, household, formData.get("plan_id") as string);
+  if (!plan) return { error: "That plan isn't active anymore." };
+
+  const { data: latest } = await supabase
+    .from("grade_checkins")
+    .select("id")
+    .eq("plan_id", plan.id)
+    .order("taken_on", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!latest) return { error: "Upload a check-in first." };
+
+  const { error } = await supabase.from("grade_checkins").update({ missing_count: missingCount }).eq("id", latest.id);
+  if (error) return { error: error.message };
+
+  revalidateGrades();
+  return { success: true };
+}

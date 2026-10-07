@@ -5,7 +5,7 @@ import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
 import { GRADE_RULES, buildProgress, cleanSheetLabel, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import CheckinUploader from "./checkin-uploader";
-import { CapEditor, ClosePlanButton, NewPlanForm } from "./plan-forms";
+import { CapEditor, ClosePlanButton, MissingCountEditor, NewPlanForm } from "./plan-forms";
 import ProgressList from "./progress-list";
 import CashOwed from "../chores/cash-owed";
 
@@ -76,6 +76,15 @@ export default async function GradesPage() {
               </div>
             ) : (
               <p className="mb-4 text-sm text-slate-500">No grades yet — upload the first check-in to set the starting point.</p>
+            )}
+
+            {state.checkinCount > 0 && (
+              <div className="mb-3">
+                <MissingCountEditor
+                  planId={plan.id}
+                  current={state.missingCounts.length ? state.missingCounts[state.missingCounts.length - 1].count : null}
+                />
+              </div>
             )}
 
             <CheckinUploader
