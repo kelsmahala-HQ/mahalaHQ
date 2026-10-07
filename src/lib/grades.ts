@@ -1,4 +1,4 @@
-// Weekly grade pay. Each Wednesday's upload pays for where each class stands *that day* compared
+// Weekly grade pay. Each weekly upload pays for where each class stands *that day* compared
 // to where it started the quarter -- a spike that's gone by the next upload simply stops paying,
 // and nothing needs clawing back. Everything here is pure (no I/O) so the Grades page, the kid
 // dashboard, and the server actions all compute from the same rules.

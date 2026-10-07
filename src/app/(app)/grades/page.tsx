@@ -56,7 +56,7 @@ export default async function GradesPage() {
               <div className="mb-4">
                 <ProgressList rows={progress} pointsPerDollar={plan.points_per_dollar} />
                 <p className="mt-2 text-xs text-slate-400">
-                  Last check-in {state.lastCheckinOn}. At these grades, next Wednesday&rsquo;s upload pays about ${standing.dollars} (⭐{" "}
+                  Last check-in {state.lastCheckinOn}. At these grades, your next weekly upload pays about ${standing.dollars} (⭐{" "}
                   {standing.dollars * plan.points_per_dollar}), up to ${GRADE_RULES.weeklyCap} a week. Quarter-end: ⭐{" "}
                   {GRADE_RULES.cleanSheet * plan.points_per_dollar} if every class is at a C or better.
                 </p>
