@@ -8,7 +8,7 @@ import { availableNow, eligibleFor, upcoming } from "../chores/availability";
 import { wallClockDate } from "@/lib/wall-clock";
 import RedeemButton from "../chores/redeem-button";
 import ProgressList from "../grades/progress-list";
-import { buildProgress } from "@/lib/grades";
+import { GRADE_RULES, buildProgress, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 
 export default async function KidDashboard({ household }: { household: CurrentHousehold }) {
@@ -63,7 +63,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
     .limit(1)
     .maybeSingle();
   const gradeState = gradePlan ? await loadPlanState(supabase, gradePlan.id) : null;
-  const gradeProgress = gradeState ? buildProgress(gradeState.baseline, gradeState.latest, gradeState.awardedKeys) : [];
+  const gradeProgress = gradeState ? buildProgress(gradeState.baseline, gradeState.latest) : [];
 
   const now = new Date();
   const { data: events } = await supabase
@@ -109,12 +109,19 @@ export default async function KidDashboard({ household }: { household: CurrentHo
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-lg font-bold text-slate-900">📚 Your Grades</h2>
             <span className="text-sm font-medium text-teal-700">
-              Earned ⭐ {gradeState.earnedPoints} · up to ⭐ {gradePlan.cash_cap * gradePlan.points_per_dollar}
+              Earned ⭐ {gradeState.earnedPoints} · ⭐ {weeklyStanding(gradeProgress).dollars * gradePlan.points_per_dollar} a week right now
             </span>
           </div>
           <div className="rounded-2xl border-2 border-teal-100 bg-white p-3 shadow-sm">
             <ProgressList rows={gradeProgress} pointsPerDollar={gradePlan.points_per_dollar} />
           </div>
+          <p className="mt-2 px-1 text-xs text-slate-500">
+            Paid every week your grades are above where they started. Quarter bonus: ⭐ {GRADE_RULES.cleanSheet * gradePlan.points_per_dollar} if
+            every class is a C or better
+            {gradeProgress.filter((r) => r.underC).length > 0
+              ? ` — ${gradeProgress.filter((r) => r.underC).length} to go.`
+              : " — you're there!"}
+          </p>
         </div>
       )}
 

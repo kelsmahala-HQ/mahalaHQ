@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
-import { closeGradePlan, createGradePlan } from "./actions";
+import { closeGradePlan, createGradePlan, updateGradePlanCap } from "./actions";
 
 export function NewPlanForm({ members }: { members: { id: string; display_name: string }[] }) {
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function NewPlanForm({ members }: { members: { id: string; display_name: 
       <input name="label" required placeholder="Grading period (e.g. Q1 2026-27)" className={inputClass} />
       <div>
         <label className="mb-1 block text-xs font-medium text-slate-500">Most cash this plan can earn ($)</label>
-        <input name="cash_cap" type="number" min={0} defaultValue={40} className={inputClass} />
+        <input name="cash_cap" type="number" min={0} defaultValue={100} className={inputClass} />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-slate-500">Points per $1</label>
@@ -93,5 +93,41 @@ export function ClosePlanButton({ planId }: { planId: string }) {
       )}
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
     </div>
+  );
+}
+
+export function CapEditor({ planId, cap }: { planId: string; cap: number }) {
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const result = await updateGradePlanCap(new FormData(e.currentTarget));
+    if ("error" in result) setError(result.error);
+    else setEditing(false);
+  }
+
+  if (!editing) {
+    return (
+      <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-slate-500 hover:text-slate-700">
+        Change the ${cap} quarterly cap
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2 text-sm">
+      <input type="hidden" name="plan_id" value={planId} />
+      <span className="text-slate-600">Most this plan can pay: $</span>
+      <input name="cash_cap" type="number" min={0} defaultValue={cap} className={`${inputClass} !w-24`} />
+      <button type="submit" className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700">
+        Save
+      </button>
+      <button type="button" onClick={() => setEditing(false)} className="text-xs text-slate-500 hover:text-slate-700">
+        Cancel
+      </button>
+      {error && <span className="text-sm text-red-600">{error}</span>}
+    </form>
   );
 }

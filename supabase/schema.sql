@@ -340,13 +340,25 @@ create table if not exists grade_awards (
   plan_id uuid not null references grade_plans(id) on delete cascade,
   member_id uuid not null references household_members(id) on delete cascade,
   class_name text,
-  kind text not null check (kind in ('rescue', 'climb', 'hold', 'clean_sheet')),
+  kind text not null check (kind in ('rescue', 'climb', 'hold', 'clean_sheet', 'weekly')),
   award_key text not null,
+  taken_on date, -- the check-in date a weekly award was paid for
   dollars integer not null,
   points integer not null,
   created_at timestamptz not null default now(),
   unique (plan_id, award_key)
 );
+
+-- Installs that created grade_awards before weekly pay existed pick up the column + widened kind list.
+alter table grade_awards add column if not exists taken_on date;
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'grade_awards_kind_check') then
+    alter table grade_awards drop constraint grade_awards_kind_check;
+  end if;
+  alter table grade_awards add constraint grade_awards_kind_check
+    check (kind in ('rescue', 'climb', 'hold', 'clean_sheet', 'weekly'));
+end $$;
 
 -- Parent-defined catalog of things kids can redeem points for (extra screen time, allowance, etc).
 create table if not exists rewards (

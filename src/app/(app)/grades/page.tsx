@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
-import { GRADE_RULES, buildProgress, cleanSheetLabel } from "@/lib/grades";
+import { GRADE_RULES, buildProgress, cleanSheetLabel, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import CheckinUploader from "./checkin-uploader";
-import { ClosePlanButton, NewPlanForm } from "./plan-forms";
+import { CapEditor, ClosePlanButton, NewPlanForm } from "./plan-forms";
 import ProgressList from "./progress-list";
 import CashOwed from "../chores/cash-owed";
 
@@ -39,7 +39,8 @@ export default async function GradesPage() {
       {activePlans.map((plan, i) => {
         const state = activeStates[i];
         const name = nameById.get(plan.member_id) ?? "Student";
-        const progress = buildProgress(state.baseline, state.latest, state.awardedKeys);
+        const progress = buildProgress(state.baseline, state.latest);
+        const standing = weeklyStanding(progress);
         return (
           <Card key={plan.id} className="mb-6">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -55,8 +56,9 @@ export default async function GradesPage() {
               <div className="mb-4">
                 <ProgressList rows={progress} pointsPerDollar={plan.points_per_dollar} />
                 <p className="mt-2 text-xs text-slate-400">
-                  Last check-in {state.lastCheckinOn}. Quarter-end: ⭐ {GRADE_RULES.cleanSheet * plan.points_per_dollar} if every class is at{" "}
-                  a C or better, plus ⭐ {GRADE_RULES.hold * plan.points_per_dollar} for each class that started at B- or better and held.
+                  Last check-in {state.lastCheckinOn}. At these grades, next Wednesday&rsquo;s upload pays about ${standing.dollars} (⭐{" "}
+                  {standing.dollars * plan.points_per_dollar}), up to ${GRADE_RULES.weeklyCap} a week. Quarter-end: ⭐{" "}
+                  {GRADE_RULES.cleanSheet * plan.points_per_dollar} if every class is at a C or better.
                 </p>
               </div>
             ) : (
@@ -65,11 +67,10 @@ export default async function GradesPage() {
 
             <CheckinUploader planId={plan.id} studentName={name} isFirstCheckin={state.checkinCount === 0} />
 
-            {state.checkinCount > 0 && (
-              <div className="mt-4 border-t border-slate-100 pt-3">
-                <ClosePlanButton planId={plan.id} />
-              </div>
-            )}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+              <CapEditor planId={plan.id} cap={plan.cash_cap} />
+              {state.checkinCount > 0 && <ClosePlanButton planId={plan.id} />}
+            </div>
           </Card>
         );
       })}
@@ -86,24 +87,24 @@ export default async function GradesPage() {
         <h2 className="mb-2 text-sm font-semibold text-slate-700">How payouts work</h2>
         <ul className="space-y-1 text-sm text-slate-600">
           <li>
-            <span className="font-medium">Rescue</span> — a failing class (under 60% or an F) gets to passing: ${GRADE_RULES.rescue}.
+            Upload her PowerSchool grades once a week. The first upload is the starting point and pays nothing.
           </li>
           <li>
-            <span className="font-medium">Climb</span> — each step up (one letter step, or 5 percentage points) from where the class
-            started: ${GRADE_RULES.climb}.
+            Each upload pays for where every class stands <span className="font-medium">that day</span> compared to where it started:{" "}
+            ${GRADE_RULES.perStep} per step up (a letter, or about 5 percentage points), up to {GRADE_RULES.maxStepsPerClass} steps per class.
           </li>
           <li>
-            <span className="font-medium">Hold</span> — a class that started at B- (80%) or better and is still there when you close the
-            quarter: ${GRADE_RULES.hold} each.
+            Most one kid can earn from a single week: ${GRADE_RULES.weeklyCap}. If a grade slips back, that class stops paying; there&rsquo;s
+            nothing to take back.
           </li>
           <li>
-            <span className="font-medium">Every class at a C or better</span> ({cleanSheetLabel("letter")} / {cleanSheetLabel("percent")}) when you close
-            the quarter: ${GRADE_RULES.cleanSheet}.
+            When you close the quarter, ${GRADE_RULES.cleanSheet} more if every class is at a C or better ({cleanSheetLabel("letter")} /{" "}
+            {cleanSheetLabel("percent")}).
           </li>
         </ul>
         <p className="mt-2 text-xs text-slate-400">
-          Each award pays once per quarter, even if a grade dips and comes back. Total payouts never go past the plan&rsquo;s cap. Points land in
-          their normal rewards balance.
+          Total payouts never go past each plan&rsquo;s quarterly cap. Points land in their normal rewards balance; only a reward with a cash
+          value ever turns into money you owe.
         </p>
       </Card>
 

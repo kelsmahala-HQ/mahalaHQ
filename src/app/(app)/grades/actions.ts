@@ -5,11 +5,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult, type CurrentHousehold } from "@/lib/household";
 import { sendPushToMember } from "@/lib/push";
-import { computeAwards, type AwardDraft } from "@/lib/grades";
+import { GRADE_RULES, buildProgress, cleanSheetEarned, weeklyStanding } from "@/lib/grades";
 import { extractGradesFromFile, type ExtractedGrades } from "@/lib/grades-extract";
 import { loadPlanState } from "@/lib/grades-data";
 
 type Plan = { id: string; member_id: string; label: string; cash_cap: number; points_per_dollar: number; status: string };
+
+type AwardDraft = {
+  kind: "weekly" | "clean_sheet";
+  class_name: string | null;
+  award_key: string;
+  dollars: number;
+  description: string;
+  taken_on?: string;
+};
+
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 function revalidateGrades() {
   revalidatePath("/grades");
@@ -93,6 +108,7 @@ async function payAwards(
         class_name: d.class_name,
         kind: d.kind,
         award_key: d.award_key,
+        taken_on: d.taken_on ?? null,
         dollars: d.dollars,
         points: d.dollars * plan.points_per_dollar,
       })),
@@ -174,13 +190,29 @@ export async function saveGradeCheckin(
 
   const state = await loadPlanState(supabase, plan.id);
   const isBaseline = state.checkinCount === 1;
-  const drafts = computeAwards({
-    baseline: state.baseline,
-    latest: state.latest,
-    alreadyAwarded: state.awardedKeys,
-    remainingDollars: plan.cash_cap - state.earnedDollars,
-    final: false,
-  });
+
+  // Weekly pay is for where each class stands today vs where it started the quarter. The first
+  // upload is only the starting point. A second upload inside the same 7 days (a fix, or an
+  // extra look) only tops up to this week's standing -- it can't pay the same week twice.
+  const drafts: AwardDraft[] = [];
+  if (!isBaseline) {
+    const standing = weeklyStanding(buildProgress(state.baseline, state.latest));
+    const windowStart = shiftDate(takenOn, -6);
+    const paidThisWeek = state.awards
+      .filter((a) => a.kind === "weekly" && a.taken_on && a.taken_on >= windowStart && a.taken_on <= takenOn)
+      .reduce((sum, a) => sum + a.dollars, 0);
+    const dollars = Math.min(Math.max(0, standing.dollars - paidThisWeek), plan.cash_cap - state.earnedDollars);
+    if (dollars > 0) {
+      drafts.push({
+        kind: "weekly",
+        class_name: null,
+        award_key: `week:${checkin.id}`,
+        dollars,
+        description: standing.description,
+        taken_on: takenOn,
+      });
+    }
+  }
 
   let paid;
   try {
@@ -193,14 +225,14 @@ export async function saveGradeCheckin(
   return {
     success: true,
     message: isBaseline
-      ? "Saved as the starting point — nothing is paid yet. Upload again later to see improvement."
+      ? "Saved as the starting point — nothing is paid yet. Upload again next week to start earning."
       : paid.lines.length
-        ? `Paid ⭐ ${paid.points} ($${paid.dollars}): ${paid.lines.join("; ")}`
-        : "Saved — no new improvement to pay yet.",
+        ? `Paid ⭐ ${paid.points} ($${paid.dollars}) — ${paid.lines.join("; ")}`
+        : "Saved — nothing to pay this week (no class is above where it started, or this week was already paid).",
   };
 }
 
-/** Quarter-end: pays the hold and "every class at a C or better" bonuses, then closes the plan. */
+/** Quarter-end: pays the "every class at a C or better" bonus, then closes the plan. */
 export async function closeGradePlan(formData: FormData): Promise<{ error: string } | { success: true; message: string }> {
   const household = await requireAdult();
   const supabase = await createClient();
@@ -209,13 +241,17 @@ export async function closeGradePlan(formData: FormData): Promise<{ error: strin
   if (!plan) return { error: "That plan isn't active anymore." };
 
   const state = await loadPlanState(supabase, plan.id);
-  const drafts = computeAwards({
-    baseline: state.baseline,
-    latest: state.latest,
-    alreadyAwarded: state.awardedKeys,
-    remainingDollars: plan.cash_cap - state.earnedDollars,
-    final: true,
-  });
+  const drafts: AwardDraft[] = [];
+  const remaining = plan.cash_cap - state.earnedDollars;
+  if (cleanSheetEarned(state.latest) && !state.awardedKeys.has("clean_sheet") && remaining > 0) {
+    drafts.push({
+      kind: "clean_sheet",
+      class_name: null,
+      award_key: "clean_sheet",
+      dollars: Math.min(GRADE_RULES.cleanSheet, remaining),
+      description: "Every class at a C or better",
+    });
+  }
 
   let paid;
   try {
@@ -235,4 +271,23 @@ export async function closeGradePlan(formData: FormData): Promise<{ error: strin
     success: true,
     message: paid.lines.length ? `Closed. Paid ⭐ ${paid.points} ($${paid.dollars}): ${paid.lines.join("; ")}` : "Closed — no quarter-end bonuses earned.",
   };
+}
+
+/** Changes the most a plan can ever pay out -- e.g. when the quarterly budget changes. */
+export async function updateGradePlanCap(formData: FormData): Promise<{ error: string } | { success: true }> {
+  const household = await requireAdult();
+  const supabase = await createClient();
+
+  const cashCap = Number(formData.get("cash_cap"));
+  if (!Number.isInteger(cashCap) || cashCap < 0) return { error: "The cap needs to be a whole number of dollars." };
+
+  const { error } = await supabase
+    .from("grade_plans")
+    .update({ cash_cap: cashCap })
+    .eq("id", formData.get("plan_id") as string)
+    .eq("household_id", household.householdId);
+  if (error) return { error: error.message };
+
+  revalidateGrades();
+  return { success: true };
 }

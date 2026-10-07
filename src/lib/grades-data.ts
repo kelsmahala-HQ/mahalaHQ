@@ -21,6 +21,7 @@ export async function loadPlanState(supabase: SupabaseClient, planId: string) {
     award_key: string;
     class_name: string | null;
     kind: string;
+    taken_on: string | null;
     dollars: number;
     points: number;
     created_at: string;
