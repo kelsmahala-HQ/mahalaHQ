@@ -1,22 +1,19 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
-import { Card, CollapsibleCard, EmptyState, PageHeader, iconButtonClass } from "@/components/ui";
+import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
 import { GRADE_RULES, buildProgress, cleanSheetLabel, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import CheckinUploader from "./checkin-uploader";
 import { CapEditor, ClosePlanButton, NewPlanForm } from "./plan-forms";
 import ProgressList from "./progress-list";
 import CashOwed from "../chores/cash-owed";
-import AddRewardForm from "../chores/add-reward-form";
-import { deleteReward } from "../chores/rewards-actions";
-import { balanceFor } from "@/lib/points";
 
 export default async function GradesPage() {
   const household = await requireAdult();
   const supabase = await createClient();
 
-  const [{ data: members }, { data: plans }, { data: allRewards }, { data: completions }, { data: redemptions }] = await Promise.all([
+  const [{ data: members }, { data: plans }] = await Promise.all([
     supabase
       .from("household_members")
       .select("id, display_name, role")
@@ -24,19 +21,7 @@ export default async function GradesPage() {
       .neq("role", "sitter")
       .order("display_name"),
     supabase.from("grade_plans").select("*").eq("household_id", household.householdId).order("created_at", { ascending: false }),
-    supabase.from("rewards").select("*").eq("household_id", household.householdId).order("cost"),
-    supabase.from("chore_completions").select("member_id, points, approval_status, kind").eq("household_id", household.householdId),
-    supabase.from("reward_redemptions").select("member_id, cost, status, source").eq("household_id", household.householdId),
   ]);
-
-  // Grade points are their own currency, spent only in the grade rewards store below.
-  const gradeRewards = (allRewards ?? []).filter((r) => r.source === "grades");
-  const gradeBalanceFor = (memberId: string) =>
-    balanceFor(
-      "grades",
-      (completions ?? []).filter((c) => c.member_id === memberId),
-      (redemptions ?? []).filter((r) => r.member_id === memberId)
-    );
 
   const nameById = new Map((members ?? []).map((m) => [m.id, m.display_name]));
   const activePlans = (plans ?? []).filter((p) => p.status === "active");
@@ -48,7 +33,7 @@ export default async function GradesPage() {
 
   return (
     <div>
-      <PageHeader title="Grades" subtitle="Upload PowerSchool, pay for improvement — not just for the grade." />
+      <PageHeader title="Grades" subtitle="Upload PowerSchool once a week. The app tells you what you owe." />
 
       {!!(members ?? []).filter((m) => m.role === "kid").length && (
         <p className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
@@ -77,17 +62,16 @@ export default async function GradesPage() {
                 {name} <span className="text-sm font-normal text-slate-400">· {plan.label}</span>
               </h2>
               <span className="text-sm font-medium text-slate-600">
-                ${state.earnedDollars} of ${plan.cash_cap} earned · ⭐ {state.earnedPoints} · balance ⭐ {gradeBalanceFor(plan.member_id)}
+                ${state.earnedDollars} of ${plan.cash_cap} earned this quarter
               </span>
             </div>
 
             {progress.length ? (
               <div className="mb-4">
-                <ProgressList rows={progress} pointsPerDollar={plan.points_per_dollar} />
+                <ProgressList rows={progress} />
                 <p className="mt-2 text-xs text-slate-400">
-                  Last check-in {state.lastCheckinOn}. At these grades, your next weekly upload pays about ${standing.dollars} (⭐{" "}
-                  {standing.dollars * plan.points_per_dollar}), up to ${GRADE_RULES.weeklyCap} a week. Quarter-end: ⭐{" "}
-                  {GRADE_RULES.cleanSheet * plan.points_per_dollar} if every class is at a C or better.
+                  Last check-in {state.lastCheckinOn}. At these grades, your next weekly upload adds about ${standing.dollars} (up to $
+                  {GRADE_RULES.weeklyCap} a week). Quarter-end: ${GRADE_RULES.cleanSheet} if every class is at a C or better.
                 </p>
               </div>
             ) : (
@@ -106,34 +90,6 @@ export default async function GradesPage() {
 
       {!activePlans.length && <EmptyState message="No active grade plans yet — start one below." />}
 
-      <Card className="mb-6">
-        <h2 className="mb-1 text-sm font-semibold text-slate-700">📚 Grade rewards</h2>
-        <p className="mb-3 text-xs text-slate-400">
-          What grade points can buy. These are separate from the chore rewards — grade points only work here, and chore points only work
-          there. A reward with a cash value shows up under Cash to pay out once you approve it.
-        </p>
-        <AddRewardForm audience="kid" source="grades" />
-        {!!gradeRewards.length && (
-          <div className="mt-4 space-y-1">
-            {gradeRewards.map((r) => (
-              <div key={r.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-                <span className="text-sm text-slate-900">{r.name}</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-slate-500">
-                    ⭐ {r.cost}
-                    {r.cash_value ? ` · 💵 $${r.cash_value}` : ""}
-                  </span>
-                  <form action={deleteReward}>
-                    <input type="hidden" name="id" value={r.id} />
-                    <button className={iconButtonClass}>Remove</button>
-                  </form>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
       {!!membersWithoutPlan.length && (
         <CollapsibleCard title="Start a grade plan" className="mb-6">
           <NewPlanForm members={membersWithoutPlan.map((m) => ({ id: m.id, display_name: m.display_name }))} />
@@ -143,15 +99,14 @@ export default async function GradesPage() {
       <Card className="mb-6 !bg-slate-50">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">How payouts work</h2>
         <ul className="space-y-1 text-sm text-slate-600">
+          <li>Upload her PowerSchool grades once a week. The first upload is the starting point and pays nothing.</li>
           <li>
-            Upload her PowerSchool grades once a week. The first upload is the starting point and pays nothing.
+            Each upload adds what you owe for where every class stands <span className="font-medium">that day</span> compared to where it
+            started: ${GRADE_RULES.perStep} per step up (a letter, or about 5 percentage points), up to {GRADE_RULES.maxStepsPerClass} steps per
+            class.
           </li>
           <li>
-            Each upload pays for where every class stands <span className="font-medium">that day</span> compared to where it started:{" "}
-            ${GRADE_RULES.perStep} per step up (a letter, or about 5 percentage points), up to {GRADE_RULES.maxStepsPerClass} steps per class.
-          </li>
-          <li>
-            Most one kid can earn from a single week: ${GRADE_RULES.weeklyCap}. If a grade slips back, that class stops paying; there&rsquo;s
+            The most one kid can earn from a single week is ${GRADE_RULES.weeklyCap}. If a grade slips back, that class stops paying; there&rsquo;s
             nothing to take back.
           </li>
           <li>
@@ -160,8 +115,8 @@ export default async function GradesPage() {
           </li>
         </ul>
         <p className="mt-2 text-xs text-slate-400">
-          Total payouts never go past each plan&rsquo;s quarterly cap. Points land in their normal rewards balance; only a reward with a cash
-          value ever turns into money you owe.
+          It all shows up in Cash to pay out above. Hand over the money, then click Mark paid. Total payouts never go past each plan&rsquo;s
+          quarterly cap.
         </p>
       </Card>
 
@@ -173,9 +128,7 @@ export default async function GradesPage() {
                 <span className="text-slate-900">
                   {nameById.get(plan.member_id) ?? "Student"} <span className="text-slate-400">· {plan.label}</span>
                 </span>
-                <span className="text-slate-500">
-                  ${closedStates[i].earnedDollars} · ⭐ {closedStates[i].earnedPoints}
-                </span>
+                <span className="text-slate-500">${closedStates[i].earnedDollars}</span>
               </div>
             ))}
           </div>

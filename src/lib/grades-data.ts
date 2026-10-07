@@ -22,6 +22,8 @@ export async function loadPlanState(supabase: SupabaseClient, planId: string) {
     class_name: string | null;
     kind: string;
     taken_on: string | null;
+    description: string | null;
+    paid_at: string | null;
     dollars: number;
     points: number;
     created_at: string;
@@ -34,6 +36,6 @@ export async function loadPlanState(supabase: SupabaseClient, planId: string) {
     awards: awardRows,
     awardedKeys: new Set(awardRows.map((a) => a.award_key)),
     earnedDollars: awardRows.reduce((sum, a) => sum + a.dollars, 0),
-    earnedPoints: awardRows.reduce((sum, a) => sum + a.points, 0),
+    paidDollars: awardRows.filter((a) => a.paid_at).reduce((sum, a) => sum + a.dollars, 0),
   };
 }

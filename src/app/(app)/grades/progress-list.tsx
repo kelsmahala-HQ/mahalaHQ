@@ -7,7 +7,7 @@ const TREND = {
 } as const;
 
 /** Each class: where it started, where it is now, what it pays this week, and the next step up. */
-export default function ProgressList({ rows, pointsPerDollar }: { rows: ClassProgress[]; pointsPerDollar: number }) {
+export default function ProgressList({ rows }: { rows: ClassProgress[] }) {
   return (
     <div className="space-y-1">
       {rows.map((r) => (
@@ -26,12 +26,12 @@ export default function ProgressList({ rows, pointsPerDollar }: { rows: ClassPro
             </span>
             {r.weeklyDollars > 0 && (
               <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800">
-                earning ⭐ {r.weeklyDollars * pointsPerDollar}/wk
+                earning ${r.weeklyDollars}/wk
               </span>
             )}
             {r.next && (
               <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">
-                {r.next.label}: +⭐ {r.next.dollars * pointsPerDollar}/wk
+                {r.next.label}: +${r.next.dollars}/wk
               </span>
             )}
           </span>

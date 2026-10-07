@@ -111,7 +111,6 @@ export default async function ChoresPage() {
         id: m.id,
         name: m.display_name,
         balance: balanceFor("chores", completions, redemptions),
-        gradeBalance: balanceFor("grades", completions, redemptions),
         pending: completions.filter((c) => c.approval_status === "pending").reduce((sum, c) => sum + c.points, 0),
       };
     })
@@ -286,15 +285,13 @@ export default async function ChoresPage() {
                 <span className="text-sm font-medium text-slate-900">{s.name}</span>
                 <span className="flex items-baseline gap-2">
                   <span className="text-sm font-semibold text-slate-700">🏆 {s.balance}</span>
-                  {s.gradeBalance !== 0 && <span className="text-sm font-semibold text-slate-700">📚 {s.gradeBalance}</span>}
                   {s.pending > 0 && <span className="text-xs text-amber-600">+{s.pending} pending</span>}
                 </span>
               </div>
             ))}
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            🏆 chore points, 📚 grade points — each is approved points earned, minus points already promised to a reward that&rsquo;s
-            been requested or approved.
+            Approved chore points earned, minus points already promised to a reward that&rsquo;s been requested or approved.
           </p>
         </Card>
       )}

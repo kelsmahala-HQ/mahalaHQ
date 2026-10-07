@@ -33,12 +33,8 @@ export function NewPlanForm({ members }: { members: { id: string; display_name: 
       </select>
       <input name="label" required placeholder="Grading period (e.g. Q1 2026-27)" className={inputClass} />
       <div>
-        <label className="mb-1 block text-xs font-medium text-slate-500">Most cash this plan can earn ($)</label>
+        <label className="mb-1 block text-xs font-medium text-slate-500">Most this plan can pay for the quarter ($)</label>
         <input name="cash_cap" type="number" min={0} defaultValue={100} className={inputClass} />
-      </div>
-      <div>
-        <label className="mb-1 block text-xs font-medium text-slate-500">Points per $1</label>
-        <input name="points_per_dollar" type="number" min={1} defaultValue={10} className={inputClass} />
       </div>
       {error && <p className="text-sm text-red-600 sm:col-span-2">{error}</p>}
       <button type="submit" disabled={loading} className={`${buttonClass} sm:col-span-2`}>

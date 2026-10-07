@@ -343,6 +343,8 @@ create table if not exists grade_awards (
   kind text not null check (kind in ('rescue', 'climb', 'hold', 'clean_sheet', 'weekly')),
   award_key text not null,
   taken_on date, -- the check-in date a weekly award was paid for
+  description text, -- e.g. 'Weekly grades: American History +$4, Health +$1'
+  paid_at timestamptz, -- null = still owed; stamped when you hand over the money
   dollars integer not null,
   points integer not null,
   created_at timestamptz not null default now(),
@@ -351,6 +353,8 @@ create table if not exists grade_awards (
 
 -- Installs that created grade_awards before weekly pay existed pick up the column + widened kind list.
 alter table grade_awards add column if not exists taken_on date;
+alter table grade_awards add column if not exists description text;
+alter table grade_awards add column if not exists paid_at timestamptz;
 do $$
 begin
   if exists (select 1 from pg_constraint where conname = 'grade_awards_kind_check') then

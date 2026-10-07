@@ -39,11 +39,9 @@ export async function createGradePlan(formData: FormData): Promise<{ error: stri
   const memberId = formData.get("member_id") as string;
   const label = ((formData.get("label") as string) ?? "").trim();
   const cashCap = Number(formData.get("cash_cap"));
-  const pointsPerDollar = Number(formData.get("points_per_dollar"));
   if (!memberId) return { error: "Pick who this plan is for." };
   if (!label) return { error: "Give the plan a name, like Q1 2026-27." };
   if (!Number.isInteger(cashCap) || cashCap < 0) return { error: "The cash cap needs to be a whole number of dollars." };
-  if (!Number.isInteger(pointsPerDollar) || pointsPerDollar < 1) return { error: "Points per dollar needs to be 1 or more." };
 
   const { data: existing } = await supabase
     .from("grade_plans")
@@ -59,7 +57,6 @@ export async function createGradePlan(formData: FormData): Promise<{ error: stri
     member_id: memberId,
     label,
     cash_cap: cashCap,
-    points_per_dollar: pointsPerDollar,
   });
   if (error) return { error: error.message };
 
@@ -86,17 +83,19 @@ async function getActivePlan(supabase: SupabaseClient, household: CurrentHouseho
 }
 
 /**
- * Records new awards once each (grade_awards is unique per plan + award_key) and credits the
- * points to the kid's balance through chore_completions, so the same balance math the rewards
- * store already uses picks them up. Returns what was actually paid.
+ * Records new awards once each (grade_awards is unique per plan + award_key). Grades pay in plain
+ * dollars you owe -- no points, no store. An award stays "owed" (paid_at null) until you mark it
+ * paid. Returns what was actually added.
  */
 async function payAwards(
   supabase: SupabaseClient,
   household: CurrentHousehold,
   plan: Plan,
   drafts: AwardDraft[]
-): Promise<{ dollars: number; points: number; lines: string[] }> {
-  if (!drafts.length) return { dollars: 0, points: 0, lines: [] };
+): Promise<{ dollars: number; lines: string[]; name: string }> {
+  const { data: member } = await supabase.from("household_members").select("display_name").eq("id", plan.member_id).single();
+  const name = member?.display_name ?? "them";
+  if (!drafts.length) return { dollars: 0, lines: [], name };
 
   const { data: inserted, error } = await supabase
     .from("grade_awards")
@@ -109,46 +108,27 @@ async function payAwards(
         kind: d.kind,
         award_key: d.award_key,
         taken_on: d.taken_on ?? null,
+        description: d.description,
         dollars: d.dollars,
-        points: d.dollars * plan.points_per_dollar,
+        points: 0,
       })),
       { onConflict: "plan_id,award_key", ignoreDuplicates: true }
     )
-    .select("award_key, dollars, points");
+    .select("award_key, dollars");
   if (error) throw new Error(error.message);
-  if (!inserted?.length) return { dollars: 0, points: 0, lines: [] };
+  if (!inserted?.length) return { dollars: 0, lines: [], name };
 
-  const { data: member } = await supabase.from("household_members").select("display_name").eq("id", plan.member_id).single();
   const descriptionByKey = new Map(drafts.map((d) => [d.award_key, d.description]));
-  const now = new Date().toISOString();
-
-  const { error: creditError } = await supabase.from("chore_completions").insert(
-    inserted.map((a) => ({
-      household_id: household.householdId,
-      chore_id: null,
-      member_id: plan.member_id,
-      points: a.points,
-      kind: "grade",
-      approval_status: "approved",
-      chore_title: `📚 ${descriptionByKey.get(a.award_key) ?? "Grades"}`,
-      member_name: member?.display_name ?? null,
-      decided_at: now,
-      decided_by: household.userId,
-    }))
-  );
-  if (creditError) throw new Error(creditError.message);
-
   const dollars = inserted.reduce((s, a) => s + a.dollars, 0);
-  const points = inserted.reduce((s, a) => s + a.points, 0);
   const lines = inserted.map((a) => descriptionByKey.get(a.award_key) ?? "Grades");
 
   await sendPushToMember(supabase, plan.member_id, {
-    title: `📚 +${points} points for your grades!`,
+    title: `📚 You earned $${dollars} for your grades!`,
     body: lines.slice(0, 3).join(" · ") + (lines.length > 3 ? ` · +${lines.length - 3} more` : ""),
     url: "/dashboard",
   });
 
-  return { dollars, points, lines };
+  return { dollars, lines, name };
 }
 
 /** Saves a reviewed check-in and pays whatever it newly earns. The first check-in is the baseline. */
@@ -227,7 +207,7 @@ export async function saveGradeCheckin(
     message: isBaseline
       ? "Saved as the starting point — nothing is paid yet. Upload again next week to start earning."
       : paid.lines.length
-        ? `Paid ⭐ ${paid.points} ($${paid.dollars}) — ${paid.lines.join("; ")}`
+        ? `You owe ${paid.name} $${paid.dollars} for this week — ${paid.lines.join("; ")}`
         : "Saved — nothing to pay this week (no class is above where it started, or this week was already paid).",
   };
 }
@@ -269,7 +249,7 @@ export async function closeGradePlan(formData: FormData): Promise<{ error: strin
   revalidateGrades();
   return {
     success: true,
-    message: paid.lines.length ? `Closed. Paid ⭐ ${paid.points} ($${paid.dollars}): ${paid.lines.join("; ")}` : "Closed — no quarter-end bonuses earned.",
+    message: paid.lines.length ? `Closed. You owe ${paid.name} another $${paid.dollars} — ${paid.lines.join("; ")}` : "Closed — no quarter-end bonuses earned.",
   };
 }
 
@@ -290,4 +270,30 @@ export async function updateGradePlanCap(formData: FormData): Promise<{ error: s
 
   revalidateGrades();
   return { success: true };
+}
+
+/** Marks one owed grade payout as handed over, so it leaves the Cash to pay out list. */
+export async function markGradeAwardPaid(formData: FormData) {
+  const household = await requireAdult();
+  const supabase = await createClient();
+  await supabase
+    .from("grade_awards")
+    .update({ paid_at: new Date().toISOString() })
+    .eq("id", formData.get("id") as string)
+    .eq("household_id", household.householdId)
+    .is("paid_at", null);
+  revalidateGrades();
+}
+
+/** Marks everything currently owed to one kid for grades as paid in one go. */
+export async function markAllGradeAwardsPaid(formData: FormData) {
+  const household = await requireAdult();
+  const supabase = await createClient();
+  await supabase
+    .from("grade_awards")
+    .update({ paid_at: new Date().toISOString() })
+    .eq("member_id", formData.get("member_id") as string)
+    .eq("household_id", household.householdId)
+    .is("paid_at", null);
+  revalidateGrades();
 }

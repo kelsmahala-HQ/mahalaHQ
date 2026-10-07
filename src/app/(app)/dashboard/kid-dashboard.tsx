@@ -42,8 +42,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
 
   // Chore points and grade points are separate currencies, each with its own rewards store.
   const choreBalance = balanceFor("chores", completions ?? [], redemptions ?? []);
-  const gradeBalance = balanceFor("grades", completions ?? [], redemptions ?? []);
-  const earned = (completions ?? [])
+    const earned = (completions ?? [])
     .filter((c) => c.approval_status === "approved" && c.kind !== "grade")
     .reduce((sum, c) => sum + c.points, 0);
   const pendingPoints = (completions ?? [])
@@ -51,7 +50,6 @@ export default async function KidDashboard({ household }: { household: CurrentHo
     .reduce((sum, c) => sum + c.points, 0);
   const pendingRedemptions = (redemptions ?? []).filter((r) => r.status === "pending");
   const choreRewards = (rewards ?? []).filter((r) => r.source !== "grades");
-  const gradeRewards = (rewards ?? []).filter((r) => r.source === "grades");
   const pendingRewardIds = new Set(pendingRedemptions.map((r) => r.reward_id));
 
   // Their own grade plan, if a parent has started one -- progress on every class plus the
@@ -86,22 +84,17 @@ export default async function KidDashboard({ household }: { household: CurrentHo
             ? "You're all caught up — awesome job! 🎉"
             : `You have ${openChores.length} chore${openChores.length === 1 ? "" : "s"} waiting — go earn some stars!`}
         </p>
-        {(availablePoints > 0 || earned > 0 || pendingPoints > 0 || gradeBalance > 0) && (
+        {(availablePoints > 0 || earned > 0 || pendingPoints > 0) && (
           <div className="mt-4 flex flex-wrap gap-4">
             <div className="rounded-xl bg-white/15 px-4 py-2">
               <p className="text-xs uppercase tracking-wide text-teal-50">Up for grabs</p>
               <p className="text-xl font-bold">⭐ {availablePoints}</p>
             </div>
             <div className="rounded-xl bg-white/15 px-4 py-2">
-              <p className="text-xs uppercase tracking-wide text-teal-50">Chore points</p>
+              <p className="text-xs uppercase tracking-wide text-teal-50">Balance</p>
               <p className="text-xl font-bold">🏆 {choreBalance}</p>
             </div>
-            {(gradeBalance > 0 || gradePlan) && (
-              <div className="rounded-xl bg-white/15 px-4 py-2">
-                <p className="text-xs uppercase tracking-wide text-teal-50">Grade points</p>
-                <p className="text-xl font-bold">📚 {gradeBalance}</p>
-              </div>
-            )}
+
             {pendingPoints > 0 && (
               <div className="rounded-xl bg-white/15 px-4 py-2">
                 <p className="text-xs uppercase tracking-wide text-teal-50">Waiting for a grown-up</p>
@@ -117,14 +110,14 @@ export default async function KidDashboard({ household }: { household: CurrentHo
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-lg font-bold text-slate-900">📚 Your Grades</h2>
             <span className="text-sm font-medium text-teal-700">
-              Earned ⭐ {gradeState.earnedPoints} · ⭐ {weeklyStanding(gradeProgress).dollars * gradePlan.points_per_dollar} a week right now
+              ${weeklyStanding(gradeProgress).dollars} a week right now · ${gradeState.earnedDollars} earned so far
             </span>
           </div>
           <div className="rounded-2xl border-2 border-teal-100 bg-white p-3 shadow-sm">
-            <ProgressList rows={gradeProgress} pointsPerDollar={gradePlan.points_per_dollar} />
+            <ProgressList rows={gradeProgress} />
           </div>
           <p className="mt-2 px-1 text-xs text-slate-500">
-            Paid every week your grades are above where they started. Quarter bonus: ⭐ {GRADE_RULES.cleanSheet * gradePlan.points_per_dollar} if
+            You earn money every week your grades are above where they started. Quarter bonus: ${GRADE_RULES.cleanSheet} if
             every class is a C or better
             {gradeProgress.filter((r) => r.underC).length > 0
               ? ` — ${gradeProgress.filter((r) => r.underC).length} to go.`
@@ -133,33 +126,9 @@ export default async function KidDashboard({ household }: { household: CurrentHo
         </div>
       )}
 
-      {!!gradeRewards.length && (
-        <div className="mb-6">
-          <h2 className="mb-3 text-lg font-bold text-slate-900">📚 Grade Rewards</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {gradeRewards.map((r) => (
-              <div key={r.id} className="rounded-2xl border-2 border-teal-100 bg-white p-4 shadow-sm">
-                <p className="text-sm font-semibold text-slate-900">{r.name}</p>
-                <p className="mb-2 mt-0.5 text-xs font-medium text-teal-700">
-                  ⭐ {r.cost}
-                  {r.cash_value ? ` · 💵 $${r.cash_value}` : ""}
-                </p>
-                {pendingRewardIds.has(r.id) ? (
-                  <button disabled className="w-full rounded-xl bg-slate-100 py-2 text-xs font-bold text-slate-400">
-                    Waiting for approval
-                  </button>
-                ) : (
-                  <RedeemButton rewardId={r.id} canAfford={gradeBalance >= r.cost} />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {!!choreRewards.length && (
         <div className="mb-6">
-          <h2 className="mb-3 text-lg font-bold text-slate-900">🎁 Chore Rewards</h2>
+          <h2 className="mb-3 text-lg font-bold text-slate-900">🎁 Rewards</h2>
           <div className="grid grid-cols-2 gap-3">
             {choreRewards.map((r) => (
               <div key={r.id} className="rounded-2xl border-2 border-teal-100 bg-white p-4 shadow-sm">
