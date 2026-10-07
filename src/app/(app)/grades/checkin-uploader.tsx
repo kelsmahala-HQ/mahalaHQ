@@ -92,19 +92,24 @@ export default function CheckinUploader({
           <p className="text-xs text-slate-500">Check these against PowerSchool. Fix anything that&rsquo;s off before saving.</p>
           <div className="space-y-2">
             {rows.map((r, i) => (
-              <div key={i} className="flex gap-2">
-                <input
-                  name="class_name"
-                  value={r.class_name}
-                  onChange={(e) => updateRow(i, { class_name: e.target.value })}
-                  className={`${inputClass} flex-1`}
-                />
-                <input
-                  name="grade"
-                  value={r.grade}
-                  onChange={(e) => updateRow(i, { grade: e.target.value })}
-                  className={`${inputClass} w-24`}
-                />
+              <div key={i} className="flex items-center gap-2">
+                {/* Widths live on the wrappers: inputClass already sets w-full, which would beat a w-* on the input itself. */}
+                <div className="min-w-0 flex-1">
+                  <input
+                    name="class_name"
+                    value={r.class_name}
+                    onChange={(e) => updateRow(i, { class_name: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="w-24 shrink-0">
+                  <input
+                    name="grade"
+                    value={r.grade}
+                    onChange={(e) => updateRow(i, { grade: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => setRows((prev) => prev?.filter((_, idx) => idx !== i) ?? null)}
@@ -118,7 +123,9 @@ export default function CheckinUploader({
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <label className="text-xs font-medium text-slate-500">Date</label>
-            <input name="taken_on" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className={`${inputClass} w-44`} />
+            <div className="w-44">
+              <input name="taken_on" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className={inputClass} />
+            </div>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-2">
