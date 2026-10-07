@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { baselineAndLatest } from "./grades";
+import { baselineAndLatest, round2 } from "./grades";
 
 /** Everything the Grades page, kid dashboard card, and server actions need to know about a plan. */
 export async function loadPlanState(supabase: SupabaseClient, planId: string) {
@@ -51,9 +51,9 @@ export async function loadPlanState(supabase: SupabaseClient, planId: string) {
       .filter((c) => typeof c.missing_count === "number")
       .map((c) => ({ checkinId: c.id, count: c.missing_count as number })),
     ...baselineAndLatest(sorted),
-    awards: awardRows,
+    awards: awardRows.map((a) => ({ ...a, dollars: Number(a.dollars) })),
     awardedKeys: new Set(awardRows.map((a) => a.award_key)),
-    earnedDollars: awardRows.reduce((sum, a) => sum + a.dollars, 0),
-    paidDollars: awardRows.filter((a) => a.paid_at).reduce((sum, a) => sum + a.dollars, 0),
+    earnedDollars: round2(awardRows.reduce((sum, a) => sum + Number(a.dollars), 0)),
+    paidDollars: round2(awardRows.filter((a) => a.paid_at).reduce((sum, a) => sum + Number(a.dollars), 0)),
   };
 }

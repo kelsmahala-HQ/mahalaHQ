@@ -307,6 +307,7 @@ create table if not exists grade_plans (
   member_id uuid not null references household_members(id) on delete cascade,
   label text not null,
   cash_cap integer not null default 40 check (cash_cap >= 0),
+  weekly_cap integer not null default 25 check (weekly_cap >= 0), -- most one week's upload can pay
   points_per_dollar integer not null default 10 check (points_per_dollar > 0),
   status text not null default 'active' check (status in ('active', 'closed')),
   created_at timestamptz not null default now(),
@@ -347,7 +348,7 @@ create table if not exists grade_awards (
   taken_on date, -- the check-in date a weekly award was paid for
   description text, -- e.g. 'Weekly grades: American History +$4, Health +$1'
   paid_at timestamptz, -- null = still owed; stamped when you hand over the money
-  dollars integer not null,
+  dollars numeric(8,2) not null,
   points integer not null,
   created_at timestamptz not null default now(),
   unique (plan_id, award_key)

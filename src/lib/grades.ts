@@ -1,45 +1,57 @@
-// Weekly grade pay. Each weekly upload pays for where each class stands *that day* compared
-// to where it started the quarter -- a spike that's gone by the next upload simply stops paying,
-// and nothing needs clawing back. Everything here is pure (no I/O) so the Grades page, the kid
-// dashboard, and the server actions all compute from the same rules.
+// Weekly grade pay. Every upload pays each class by the grade it has that day (A+ pays the most),
+// so a grade that drops simply pays less -- nothing to claw back, nothing to track. Everything
+// here is pure (no I/O) so the Grades page, the kid dashboard, and the server actions all compute
+// from the same rules.
 
 export const GRADE_RULES = {
-  perStep: 1, // dollars per step above where the class started the quarter, per week
-  maxStepsPerClass: 4, // a class stops earning more after this many steps up
   missingTurnedIn: 1, // per missing assignment the kid's total dropped since the last count
-  keepItUp: 1, // per class, per week: started at an A (A- / 90%) and still there
-  weeklyCap: 10, // most one kid can earn from a single week's upload
-  cleanSheet: 15, // quarter-end: every class at C or better
+  weeklyCap: 25, // default most one kid can earn from a single week's upload (editable per plan)
+  cleanSheet: 15, // quarter-end: every class at a C or better
 } as const;
 
-// PowerSchool shows Bailee's high-school classes as percentages and Mayla's elementary ones as
-// letters, so a "level" is either (percent / 5) or an index into this ladder.
-const LETTERS = ["F", "D-", "D", "D+", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"];
+/** Dollars per class per week by grade, best first. minPercent turns a percentage into a letter. */
+export const GRADE_PAY = [
+  { letter: "A+", dollars: 3, minPercent: 97 },
+  { letter: "A", dollars: 2.75, minPercent: 93 },
+  { letter: "A-", dollars: 2.5, minPercent: 90 },
+  { letter: "B+", dollars: 2, minPercent: 87 },
+  { letter: "B", dollars: 1.75, minPercent: 83 },
+  { letter: "B-", dollars: 1.5, minPercent: 80 },
+  { letter: "C+", dollars: 1, minPercent: 77 },
+  { letter: "C", dollars: 0.75, minPercent: 73 },
+  { letter: "C-", dollars: 0.5, minPercent: 70 },
+  { letter: "D+", dollars: 0, minPercent: 67 },
+  { letter: "D", dollars: 0, minPercent: 63 },
+  { letter: "D-", dollars: 0, minPercent: 60 },
+  { letter: "F", dollars: 0, minPercent: 0 },
+] as const;
 
-type Scale = "percent" | "letter";
-const THRESHOLDS: Record<Scale, { pass: number; clean: number; top: number; max: number }> = {
-  percent: { pass: 12, clean: 14, top: 18, max: 20 }, // 60% (passing), C = 70%, A = 90%, 100%
-  letter: { pass: 1, clean: 5, top: 10, max: 12 }, // D- (passing), C, A-, A+
-};
+const C_INDEX = GRADE_PAY.findIndex((g) => g.letter === "C");
+const F_INDEX = GRADE_PAY.length - 1;
 
-export type Level = { level: number; scale: Scale };
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
-/** Parses "94", "94.5%", or "C-" into a comparable level. Anything else (blank, "[i]", "I") is null. */
-export function parseGrade(grade: string): Level | null {
+/** $3, $2.75, $0.50 -- whole dollars without cents, anything else with two decimals (Venmo-friendly). */
+export function formatMoney(n: number): string {
+  const v = round2(n);
+  return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
+}
+
+/** "94" or "94.5%" becomes a letter via the percent cutoffs; "C-" is used as-is. Anything else is null. */
+export function gradeLetter(grade: string): string | null {
   const g = grade.trim().toUpperCase();
   const pct = g.match(/^(\d{1,3}(?:\.\d+)?)\s*%?$/);
-  if (pct) return { level: Math.min(20, Math.floor(Number(pct[1]) / 5)), scale: "percent" };
-  const idx = LETTERS.indexOf(g);
-  return idx >= 0 ? { level: idx, scale: "letter" } : null;
+  if (pct) {
+    const value = Number(pct[1]);
+    return GRADE_PAY.find((p) => value >= p.minPercent)?.letter ?? "F";
+  }
+  return GRADE_PAY.some((p) => p.letter === g) ? g : null;
 }
 
-export function levelLabel(scale: Scale, level: number): string {
-  return scale === "percent" ? `${level * 5}%` : LETTERS[level];
-}
-
-/** The bar for the quarter-end "no grade below a C" bonus. */
-export function cleanSheetLabel(scale: Scale): string {
-  return levelLabel(scale, THRESHOLDS[scale].clean);
+function letterIndex(letter: string): number {
+  return GRADE_PAY.findIndex((p) => p.letter === letter);
 }
 
 export function classKey(name: string): string {
@@ -48,22 +60,19 @@ export function classKey(name: string): string {
 
 export type ClassGrade = { name: string; grade: string };
 
-/** Steps a class is above where it started the quarter (0 if level or below), capped for pay. */
-function stepsUp(then: Level, now: Level): number {
-  return Math.max(0, now.level - then.level);
-}
-
 export type ClassProgress = {
   name: string;
   baseGrade: string;
   latestGrade: string;
+  /** The letter the latest grade works out to (a percentage is converted). */
+  letter: string | null;
   trend: "up" | "down" | "same";
   failing: boolean;
   /** Below a C right now -- what the quarter-end bonus is waiting on. */
   underC: boolean;
-  /** Dollars this class earns per week at its current grade. */
+  /** Dollars this class pays per week at its current grade. */
   weeklyDollars: number;
-  /** The next step that would raise this class's weekly pay, if there is one. */
+  /** The next grade up that would raise this class's pay, and by how much. */
   next: { label: string; dollars: number } | null;
 };
 
@@ -72,46 +81,70 @@ export function buildProgress(baseline: Map<string, ClassGrade>, latest: Map<str
   const rows: ClassProgress[] = [];
   for (const [key, now] of latest) {
     const then = baseline.get(key) ?? now;
-    const nowLevel = parseGrade(now.grade);
-    const thenLevel = parseGrade(then.grade);
-    if (!nowLevel || !thenLevel || nowLevel.scale !== thenLevel.scale) {
-      rows.push({ name: now.name, baseGrade: then.grade, latestGrade: now.grade, trend: "same", failing: false, underC: false, weeklyDollars: 0, next: null });
+    const nowLetter = gradeLetter(now.grade);
+    const thenLetter = gradeLetter(then.grade);
+    if (!nowLetter || !thenLetter) {
+      rows.push({
+        name: now.name,
+        baseGrade: then.grade,
+        latestGrade: now.grade,
+        letter: nowLetter,
+        trend: "same",
+        failing: false,
+        underC: false,
+        weeklyDollars: 0,
+        next: null,
+      });
       continue;
     }
 
-    const t = THRESHOLDS[nowLevel.scale];
-    const steps = Math.min(stepsUp(thenLevel, nowLevel), GRADE_RULES.maxStepsPerClass);
-    // "Keep it up": a class that started at an A and is still at an A. It can't climb much
-    // further, so this is what makes holding a top grade worth something.
-    const keepingA = thenLevel.level >= t.top && nowLevel.level >= t.top;
-    const target = Math.max(nowLevel.level, thenLevel.level) + 1;
-    const canEarnMore = steps < GRADE_RULES.maxStepsPerClass && target <= t.max;
+    const nowIdx = letterIndex(nowLetter);
+    const thenIdx = letterIndex(thenLetter);
+    const pay = GRADE_PAY[nowIdx].dollars;
+    const showPercent = /^\d/.test(now.grade.trim());
+
+    // The nearest better grade that actually pays more than this one does now.
+    let next: ClassProgress["next"] = null;
+    for (let i = nowIdx - 1; i >= 0; i--) {
+      if (GRADE_PAY[i].dollars > pay) {
+        const target = GRADE_PAY[i];
+        next = {
+          label: `Reach ${target.letter}${showPercent ? ` (${target.minPercent}%)` : ""}`,
+          dollars: round2(target.dollars - pay),
+        };
+        break;
+      }
+    }
 
     rows.push({
       name: now.name,
       baseGrade: then.grade,
       latestGrade: now.grade,
-      trend: nowLevel.level > thenLevel.level ? "up" : nowLevel.level < thenLevel.level ? "down" : "same",
-      failing: nowLevel.level < t.pass,
-      underC: nowLevel.level < t.clean,
-      weeklyDollars: steps * GRADE_RULES.perStep + (keepingA ? GRADE_RULES.keepItUp : 0),
-      next: canEarnMore ? { label: `Reach ${levelLabel(nowLevel.scale, target)}`, dollars: GRADE_RULES.perStep } : null,
+      letter: nowLetter,
+      trend: nowIdx < thenIdx ? "up" : nowIdx > thenIdx ? "down" : "same",
+      failing: nowIdx === F_INDEX,
+      underC: nowIdx > C_INDEX,
+      weeklyDollars: pay,
+      next,
     });
   }
   return rows;
 }
 
-/** What this week's standing is worth before the weekly cap, with a one-line description. */
+/** What this week's grades are worth, capped, with a one-line description of where it came from. */
 export function weeklyStanding(
   progress: ClassProgress[],
-  missingTurnedIn = 0
+  missingTurnedIn = 0,
+  weeklyCap: number = GRADE_RULES.weeklyCap
 ): { dollars: number; description: string } {
   const earners = progress.filter((p) => p.weeklyDollars > 0);
   const missingDollars = missingTurnedIn * GRADE_RULES.missingTurnedIn;
   const raw = earners.reduce((sum, p) => sum + p.weeklyDollars, 0) + missingDollars;
-  const dollars = Math.min(raw, GRADE_RULES.weeklyCap);
-  const parts = earners.map((p) => `${p.name} +$${p.weeklyDollars}`);
-  if (missingDollars > 0) parts.push(`${missingTurnedIn} missing assignment${missingTurnedIn === 1 ? "" : "s"} turned in +$${missingDollars}`);
+  const dollars = round2(Math.min(raw, weeklyCap));
+  const parts = earners.map((p) => `${p.name} ${formatMoney(p.weeklyDollars)}`);
+  if (missingDollars > 0) {
+    parts.push(`${missingTurnedIn} missing assignment${missingTurnedIn === 1 ? "" : "s"} turned in ${formatMoney(missingDollars)}`);
+  }
   const description = parts.length ? `Weekly grades: ${parts.join(", ")}` : "Weekly grades";
   return { dollars, description };
 }
@@ -120,9 +153,9 @@ export function weeklyStanding(
 export function cleanSheetEarned(latest: Map<string, ClassGrade>): boolean {
   if (!latest.size) return false;
   for (const g of latest.values()) {
-    const lv = parseGrade(g.grade);
-    if (!lv) continue;
-    if (lv.level < THRESHOLDS[lv.scale].clean) return false;
+    const letter = gradeLetter(g.grade);
+    if (!letter) continue;
+    if (letterIndex(letter) > C_INDEX) return false;
   }
   return true;
 }

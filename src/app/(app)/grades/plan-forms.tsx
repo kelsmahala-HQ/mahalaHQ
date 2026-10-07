@@ -34,7 +34,11 @@ export function NewPlanForm({ members }: { members: { id: string; display_name: 
       <input name="label" required placeholder="Grading period (e.g. Q1 2026-27)" className={inputClass} />
       <div>
         <label className="mb-1 block text-xs font-medium text-slate-500">Most this plan can pay for the quarter ($)</label>
-        <input name="cash_cap" type="number" min={0} defaultValue={100} className={inputClass} />
+        <input name="cash_cap" type="number" min={0} defaultValue={200} className={inputClass} />
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium text-slate-500">Most per week ($)</label>
+        <input name="weekly_cap" type="number" min={0} defaultValue={25} className={inputClass} />
       </div>
       {error && <p className="text-sm text-red-600 sm:col-span-2">{error}</p>}
       <button type="submit" disabled={loading} className={`${buttonClass} sm:col-span-2`}>
@@ -92,7 +96,7 @@ export function ClosePlanButton({ planId }: { planId: string }) {
   );
 }
 
-export function CapEditor({ planId, cap }: { planId: string; cap: number }) {
+export function CapEditor({ planId, cap, weeklyCap }: { planId: string; cap: number; weeklyCap: number }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,7 +111,7 @@ export function CapEditor({ planId, cap }: { planId: string; cap: number }) {
   if (!editing) {
     return (
       <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-slate-500 hover:text-slate-700">
-        Change the ${cap} quarterly cap
+        Caps: ${cap} a quarter, ${weeklyCap} a week — change
       </button>
     );
   }
@@ -115,8 +119,10 @@ export function CapEditor({ planId, cap }: { planId: string; cap: number }) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2 text-sm">
       <input type="hidden" name="plan_id" value={planId} />
-      <span className="text-slate-600">Most this plan can pay: $</span>
+      <span className="text-slate-600">Most per quarter: $</span>
       <input name="cash_cap" type="number" min={0} defaultValue={cap} className={`${inputClass} !w-24`} />
+      <span className="text-slate-600">Most per week: $</span>
+      <input name="weekly_cap" type="number" min={0} defaultValue={weeklyCap} className={`${inputClass} !w-24`} />
       <button type="submit" className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-semibold text-white hover:bg-teal-700">
         Save
       </button>

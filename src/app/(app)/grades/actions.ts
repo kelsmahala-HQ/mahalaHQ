@@ -5,11 +5,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult, type CurrentHousehold } from "@/lib/household";
 import { sendPushToMember } from "@/lib/push";
-import { GRADE_RULES, buildProgress, cleanSheetEarned, weeklyStanding } from "@/lib/grades";
+import { GRADE_RULES, buildProgress, cleanSheetEarned, formatMoney, round2, weeklyStanding } from "@/lib/grades";
 import { extractGradesFromFile, type ExtractedGrades } from "@/lib/grades-extract";
 import { loadPlanState } from "@/lib/grades-data";
 
-type Plan = { id: string; member_id: string; label: string; cash_cap: number; points_per_dollar: number; status: string };
+type Plan = { id: string; member_id: string; label: string; cash_cap: number; weekly_cap?: number | null; status: string };
 
 type AwardDraft = {
   kind: "weekly" | "clean_sheet";
@@ -39,9 +39,11 @@ export async function createGradePlan(formData: FormData): Promise<{ error: stri
   const memberId = formData.get("member_id") as string;
   const label = ((formData.get("label") as string) ?? "").trim();
   const cashCap = Number(formData.get("cash_cap"));
+  const weeklyCap = Number(formData.get("weekly_cap") || GRADE_RULES.weeklyCap);
   if (!memberId) return { error: "Pick who this plan is for." };
   if (!label) return { error: "Give the plan a name, like Q1 2026-27." };
   if (!Number.isInteger(cashCap) || cashCap < 0) return { error: "The cash cap needs to be a whole number of dollars." };
+  if (!Number.isInteger(weeklyCap) || weeklyCap < 0) return { error: "The weekly cap needs to be a whole number of dollars." };
 
   const { data: existing } = await supabase
     .from("grade_plans")
@@ -57,6 +59,7 @@ export async function createGradePlan(formData: FormData): Promise<{ error: stri
     member_id: memberId,
     label,
     cash_cap: cashCap,
+    weekly_cap: weeklyCap,
   });
   if (error) return { error: error.message };
 
@@ -75,7 +78,7 @@ export async function readGradesFile(formData: FormData): Promise<ExtractedGrade
 async function getActivePlan(supabase: SupabaseClient, household: CurrentHousehold, planId: string): Promise<Plan | null> {
   const { data } = await supabase
     .from("grade_plans")
-    .select("id, member_id, label, cash_cap, points_per_dollar, status")
+    .select("*")
     .eq("id", planId)
     .eq("household_id", household.householdId)
     .single();
@@ -123,7 +126,7 @@ async function payAwards(
   const lines = inserted.map((a) => descriptionByKey.get(a.award_key) ?? "Grades");
 
   await sendPushToMember(supabase, plan.member_id, {
-    title: `📚 You earned $${dollars} for your grades!`,
+    title: `📚 You earned ${formatMoney(dollars)} for your grades!`,
     body: lines.slice(0, 3).join(" · ") + (lines.length > 3 ? ` · +${lines.length - 3} more` : ""),
     url: "/dashboard",
   });
@@ -182,23 +185,25 @@ export async function saveGradeCheckin(
   if (entriesError) return { error: entriesError.message };
 
   const state = await loadPlanState(supabase, plan.id);
-  const isBaseline = state.checkinCount === 1;
-
-  // Weekly pay is for where each class stands today vs where it started the quarter. The first
-  // upload is only the starting point. A second upload inside the same 7 days (a fix, or an
-  // extra look) only tops up to this week's standing -- it can't pay the same week twice.
+  // Every upload pays that week's standing: each class by its current grade, plus any missing
+  // assignments turned in. A second upload inside the same 7 days only tops up to this week's
+  // standing -- it can't pay the same week twice.
   const drafts: AwardDraft[] = [];
-  if (!isBaseline) {
+  {
     // Compare against the most recent earlier check-in that had a number (this one is last).
     const counts = state.missingCounts.filter((c) => c.checkinId !== checkin.id);
     const previousMissing = counts.length ? counts[counts.length - 1].count : null;
     const turnedIn = missingCount !== null && previousMissing !== null ? Math.max(0, previousMissing - missingCount) : 0;
-    const standing = weeklyStanding(buildProgress(state.baseline, state.latest), turnedIn);
+    const standing = weeklyStanding(
+      buildProgress(state.baseline, state.latest),
+      turnedIn,
+      plan.weekly_cap ?? GRADE_RULES.weeklyCap
+    );
     const windowStart = shiftDate(takenOn, -6);
     const paidThisWeek = state.awards
       .filter((a) => a.kind === "weekly" && a.taken_on && a.taken_on >= windowStart && a.taken_on <= takenOn)
       .reduce((sum, a) => sum + a.dollars, 0);
-    const dollars = Math.min(Math.max(0, standing.dollars - paidThisWeek), plan.cash_cap - state.earnedDollars);
+    const dollars = round2(Math.min(Math.max(0, standing.dollars - paidThisWeek), plan.cash_cap - state.earnedDollars));
     if (dollars > 0) {
       drafts.push({
         kind: "weekly",
@@ -221,11 +226,9 @@ export async function saveGradeCheckin(
   revalidateGrades();
   return {
     success: true,
-    message: isBaseline
-      ? "Saved as the starting point — nothing is paid yet. Upload again next week to start earning."
-      : paid.lines.length
-        ? `You owe ${paid.name} $${paid.dollars} for this week — ${paid.lines.join("; ")}`
-        : "Saved — nothing to pay this week (no class is above where it started, or this week was already paid).",
+    message: paid.lines.length
+      ? `You owe ${paid.name} ${formatMoney(paid.dollars)} for this week — ${paid.lines.join("; ")}`
+      : "Saved — nothing new to pay (this week was already paid, or the cap is reached).",
   };
 }
 
@@ -266,7 +269,7 @@ export async function closeGradePlan(formData: FormData): Promise<{ error: strin
   revalidateGrades();
   return {
     success: true,
-    message: paid.lines.length ? `Closed. You owe ${paid.name} another $${paid.dollars} — ${paid.lines.join("; ")}` : "Closed — no quarter-end bonuses earned.",
+    message: paid.lines.length ? `Closed. You owe ${paid.name} another ${formatMoney(paid.dollars)} — ${paid.lines.join("; ")}` : "Closed — no quarter-end bonuses earned.",
   };
 }
 
@@ -276,11 +279,16 @@ export async function updateGradePlanCap(formData: FormData): Promise<{ error: s
   const supabase = await createClient();
 
   const cashCap = Number(formData.get("cash_cap"));
-  if (!Number.isInteger(cashCap) || cashCap < 0) return { error: "The cap needs to be a whole number of dollars." };
+  const weeklyRaw = formData.get("weekly_cap");
+  const weeklyCap = weeklyRaw === null || weeklyRaw === "" ? null : Number(weeklyRaw);
+  if (!Number.isInteger(cashCap) || cashCap < 0) return { error: "The quarterly cap needs to be a whole number of dollars." };
+  if (weeklyCap !== null && (!Number.isInteger(weeklyCap) || weeklyCap < 0)) {
+    return { error: "The weekly cap needs to be a whole number of dollars." };
+  }
 
   const { error } = await supabase
     .from("grade_plans")
-    .update({ cash_cap: cashCap })
+    .update({ cash_cap: cashCap, ...(weeklyCap !== null ? { weekly_cap: weeklyCap } : {}) })
     .eq("id", formData.get("plan_id") as string)
     .eq("household_id", household.householdId);
   if (error) return { error: error.message };

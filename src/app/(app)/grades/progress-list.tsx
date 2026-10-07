@@ -1,4 +1,4 @@
-import type { ClassProgress } from "@/lib/grades";
+import { formatMoney, type ClassProgress } from "@/lib/grades";
 
 const TREND = {
   up: { icon: "▲", className: "text-teal-600" },
@@ -6,7 +6,7 @@ const TREND = {
   same: { icon: "–", className: "text-slate-300" },
 } as const;
 
-/** Each class: where it started, where it is now, what it pays this week, and the next step up. */
+/** Each class: its grade, what that pays this week, and the next grade up with how much it adds. */
 export default function ProgressList({ rows }: { rows: ClassProgress[] }) {
   return (
     <div className="space-y-1">
@@ -21,17 +21,18 @@ export default function ProgressList({ rows }: { rows: ClassProgress[] }) {
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="text-slate-500">
               {r.baseGrade !== r.latestGrade && <span className="text-slate-400">{r.baseGrade} → </span>}
-              <span className="font-semibold text-slate-800">{r.latestGrade}</span>{" "}
+              <span className="font-semibold text-slate-800">{r.latestGrade}</span>
+              {r.letter && r.letter !== r.latestGrade.trim().toUpperCase() && <span className="text-slate-400"> ({r.letter})</span>}{" "}
               <span className={TREND[r.trend].className}>{TREND[r.trend].icon}</span>
             </span>
             {r.weeklyDollars > 0 && (
               <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800">
-                earning ${r.weeklyDollars}/wk
+                earning {formatMoney(r.weeklyDollars)}/wk
               </span>
             )}
             {r.next && (
               <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">
-                {r.next.label}: +${r.next.dollars}/wk
+                {r.next.label}: +{formatMoney(r.next.dollars)}/wk
               </span>
             )}
           </span>

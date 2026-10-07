@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
-import { GRADE_RULES, buildProgress, cleanSheetLabel, weeklyStanding } from "@/lib/grades";
+import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import CheckinUploader from "./checkin-uploader";
 import { CapEditor, ClosePlanButton, MissingCountEditor, NewPlanForm } from "./plan-forms";
@@ -54,7 +54,8 @@ export default async function GradesPage() {
         const state = activeStates[i];
         const name = nameById.get(plan.member_id) ?? "Student";
         const progress = buildProgress(state.baseline, state.latest);
-        const standing = weeklyStanding(progress);
+        const weeklyCap = plan.weekly_cap ?? GRADE_RULES.weeklyCap;
+        const standing = weeklyStanding(progress, 0, weeklyCap);
         return (
           <Card key={plan.id} className="mb-6">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -62,7 +63,7 @@ export default async function GradesPage() {
                 {name} <span className="text-sm font-normal text-slate-400">· {plan.label}</span>
               </h2>
               <span className="text-sm font-medium text-slate-600">
-                ${state.earnedDollars} of ${plan.cash_cap} earned this quarter
+                {formatMoney(state.earnedDollars)} of ${plan.cash_cap} earned this quarter
               </span>
             </div>
 
@@ -70,8 +71,8 @@ export default async function GradesPage() {
               <div className="mb-4">
                 <ProgressList rows={progress} />
                 <p className="mt-2 text-xs text-slate-400">
-                  Last check-in {state.lastCheckinOn}. At these grades, your next weekly upload adds about ${standing.dollars} (up to $
-                  {GRADE_RULES.weeklyCap} a week). Quarter-end: ${GRADE_RULES.cleanSheet} if every class is at a C or better.
+                  Last check-in {state.lastCheckinOn}. At these grades, your next weekly upload adds about {formatMoney(standing.dollars)} (up to $
+                  {weeklyCap} a week). Quarter-end: ${GRADE_RULES.cleanSheet} if every class is at a C or better.
                 </p>
               </div>
             ) : (
@@ -95,7 +96,7 @@ export default async function GradesPage() {
             />
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-              <CapEditor planId={plan.id} cap={plan.cash_cap} />
+              <CapEditor planId={plan.id} cap={plan.cash_cap} weeklyCap={weeklyCap} />
               {state.checkinCount > 0 && <ClosePlanButton planId={plan.id} />}
             </div>
           </Card>
@@ -113,31 +114,25 @@ export default async function GradesPage() {
       <Card className="mb-6 !bg-slate-50">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">How payouts work</h2>
         <ul className="space-y-1 text-sm text-slate-600">
-          <li>Upload her PowerSchool grades once a week. The first upload is the starting point and pays nothing.</li>
-          <li>
-            Each upload adds what you owe for where every class stands <span className="font-medium">that day</span> compared to where it
-            started: ${GRADE_RULES.perStep} per step up (a letter, or about 5 percentage points), up to {GRADE_RULES.maxStepsPerClass} steps per
-            class.
-          </li>
-          <li>
-            Keep it up: ${GRADE_RULES.keepItUp} a week for each class that started at an A (90% or A-) and is still there.
-          </li>
+          <li>Upload her PowerSchool grades once a week. Every upload pays for each class by the grade it has that day.</li>
+          <li>A grade that drops just pays the lower amount. Nothing is taken back from weeks already paid.</li>
           <li>
             Missing work: each upload has a box for how many assignments are missing right now. ${GRADE_RULES.missingTurnedIn} for each one the
             total drops by since the last number you entered.
           </li>
-          <li>
-            The most one kid can earn from a single week is ${GRADE_RULES.weeklyCap}. If a grade slips back, that class stops paying; there&rsquo;s
-            nothing to take back.
-          </li>
-          <li>
-            When you close the quarter, ${GRADE_RULES.cleanSheet} more if every class is at a C or better ({cleanSheetLabel("letter")} /{" "}
-            {cleanSheetLabel("percent")}).
-          </li>
+          <li>When you close the quarter, ${GRADE_RULES.cleanSheet} more if every class is at a C or better.</li>
         </ul>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
+          {GRADE_PAY.filter((g) => g.dollars > 0).map((g) => (
+            <span key={g.letter}>
+              <span className="font-medium">{g.letter}</span> {formatMoney(g.dollars)}
+            </span>
+          ))}
+          <span className="text-slate-400">D and below $0</span>
+        </div>
         <p className="mt-2 text-xs text-slate-400">
-          It all shows up in Cash to pay out above. Hand over the money, then click Mark paid. Total payouts never go past each plan&rsquo;s
-          quarterly cap.
+          Per class, per week. Percentages count as A+ 97+, A 93+, A- 90+, B+ 87+, B 83+, B- 80+, C+ 77+, C 73+, C- 70+. It all shows up in Cash to
+          pay out above. Total payouts never go past each plan&rsquo;s weekly and quarterly caps.
         </p>
       </Card>
 
@@ -149,7 +144,7 @@ export default async function GradesPage() {
                 <span className="text-slate-900">
                   {nameById.get(plan.member_id) ?? "Student"} <span className="text-slate-400">· {plan.label}</span>
                 </span>
-                <span className="text-slate-500">${closedStates[i].earnedDollars}</span>
+                <span className="text-slate-500">{formatMoney(closedStates[i].earnedDollars)}</span>
               </div>
             ))}
           </div>

@@ -8,7 +8,7 @@ import { availableNow, eligibleFor, upcoming } from "../chores/availability";
 import { wallClockDate } from "@/lib/wall-clock";
 import RedeemButton from "../chores/redeem-button";
 import ProgressList from "../grades/progress-list";
-import { GRADE_RULES, buildProgress, weeklyStanding } from "@/lib/grades";
+import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import { balanceFor } from "@/lib/points";
 
@@ -110,7 +110,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-lg font-bold text-slate-900">📚 Your Grades</h2>
             <span className="text-sm font-medium text-teal-700">
-              ${weeklyStanding(gradeProgress).dollars} a week right now · ${gradeState.earnedDollars} earned so far
+              {formatMoney(weeklyStanding(gradeProgress, 0, gradePlan.weekly_cap ?? GRADE_RULES.weeklyCap).dollars)} a week right now · {formatMoney(gradeState.earnedDollars)} earned so far
             </span>
           </div>
           <div className="rounded-2xl border-2 border-teal-100 bg-white p-3 shadow-sm">
@@ -123,8 +123,11 @@ export default async function KidDashboard({ household }: { household: CurrentHo
             </p>
           )}
           <p className="mt-2 px-1 text-xs text-slate-500">
-            You earn money every week your grades are above where they started, or you&rsquo;re holding an A. Quarter bonus: ${GRADE_RULES.cleanSheet} if
-            every class is a C or better
+            Every class pays each week by its grade:{" "}
+            {GRADE_PAY.filter((g) => g.dollars > 0)
+              .map((g) => `${g.letter} ${formatMoney(g.dollars)}`)
+              .join(" · ")}
+            . Quarter bonus: ${GRADE_RULES.cleanSheet} if every class is a C or better
             {gradeProgress.filter((r) => r.underC).length > 0
               ? ` — ${gradeProgress.filter((r) => r.underC).length} to go.`
               : " — you're there!"}

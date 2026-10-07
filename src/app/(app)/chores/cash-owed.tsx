@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui";
 import { markRedemptionPaid } from "./rewards-actions";
 import { markAllGradeAwardsPaid, markGradeAwardPaid } from "../grades/actions";
+import { formatMoney, round2 } from "@/lib/grades";
 
 type Item = {
   key: string;
@@ -80,7 +81,7 @@ export default async function CashOwed({ householdId, hideWhenEmpty = false }: {
   if (hideWhenEmpty && !owed.length) return null;
 
   const nameById = new Map((members ?? []).map((m) => [m.id, m.display_name]));
-  const total = owed.reduce((sum, i) => sum + i.dollars, 0);
+  const total = round2(owed.reduce((sum, i) => sum + i.dollars, 0));
 
   const byMember = new Map<string, Item[]>();
   for (const item of owed) {
@@ -111,7 +112,7 @@ export default async function CashOwed({ householdId, hideWhenEmpty = false }: {
     <Card className="mb-8 !bg-emerald-50">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-sm font-semibold text-slate-700">💵 Cash to pay out</h2>
-        <span className="text-lg font-bold text-emerald-700">${total}</span>
+        <span className="text-lg font-bold text-emerald-700">{formatMoney(total)}</span>
       </div>
 
       {!owed.length ? (
@@ -124,13 +125,13 @@ export default async function CashOwed({ householdId, hideWhenEmpty = false }: {
               <div key={memberId}>
                 <p className="mb-1 flex items-center justify-between gap-2 text-sm font-semibold text-slate-800">
                   <span>
-                    {nameById.get(memberId) ?? "Someone"} · ${rows.reduce((s, r) => s + r.dollars, 0)}
+                    {nameById.get(memberId) ?? "Someone"} · {formatMoney(rows.reduce((s, r) => s + r.dollars, 0))}
                   </span>
                   {gradeRows.length > 1 && (
                     <form action={markAllGradeAwardsPaid}>
                       <input type="hidden" name="member_id" value={memberId} />
                       <button className="text-xs font-medium text-emerald-700 hover:underline">
-                        Mark all grade pay paid (${gradeRows.reduce((s, r) => s + r.dollars, 0)})
+                        Mark all grade pay paid ({formatMoney(gradeRows.reduce((s, r) => s + r.dollars, 0))})
                       </button>
                     </form>
                   )}
@@ -139,7 +140,7 @@ export default async function CashOwed({ householdId, hideWhenEmpty = false }: {
                   {rows.map((r) => (
                     <div key={r.key} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2">
                       <span className="text-sm text-slate-900">
-                        {r.label} <span className="font-medium text-emerald-700">${r.dollars}</span>
+                        {r.label} <span className="font-medium text-emerald-700">{formatMoney(r.dollars)}</span>
                         {r.when && <span className="ml-2 text-xs text-slate-400">{format(new Date(r.when), "MMM d")}</span>}
                       </span>
                       <form action={r.kind === "grade" ? markGradeAwardPaid : markRedemptionPaid}>
@@ -167,7 +168,7 @@ export default async function CashOwed({ householdId, hideWhenEmpty = false }: {
                   {nameById.get(r.member_id) ?? "Someone"} · {r.label}
                 </span>
                 <span>
-                  ${r.dollars} · {format(new Date(r.paid_at), "MMM d")}
+                  {formatMoney(r.dollars)} · {format(new Date(r.paid_at), "MMM d")}
                 </span>
               </p>
             ))}
