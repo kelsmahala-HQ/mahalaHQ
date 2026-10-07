@@ -78,7 +78,12 @@ export default async function GradesPage() {
               <p className="mb-4 text-sm text-slate-500">No grades yet — upload the first check-in to set the starting point.</p>
             )}
 
-            <CheckinUploader planId={plan.id} studentName={name} isFirstCheckin={state.checkinCount === 0} />
+            <CheckinUploader
+              planId={plan.id}
+              studentName={name}
+              isFirstCheckin={state.checkinCount === 0}
+              lastMissing={state.missingCounts.length ? state.missingCounts[state.missingCounts.length - 1].count : null}
+            />
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
               <CapEditor planId={plan.id} cap={plan.cash_cap} />
@@ -107,6 +112,10 @@ export default async function GradesPage() {
           </li>
           <li>
             Keep it up: ${GRADE_RULES.keepItUp} a week for each class that started at an A (90% or A-) and is still there.
+          </li>
+          <li>
+            Missing work: each upload has a box for how many assignments are missing right now. ${GRADE_RULES.missingTurnedIn} for each one the
+            total drops by since the last number you entered.
           </li>
           <li>
             The most one kid can earn from a single week is ${GRADE_RULES.weeklyCap}. If a grade slips back, that class stops paying; there&rsquo;s

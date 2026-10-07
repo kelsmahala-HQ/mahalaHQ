@@ -150,9 +150,22 @@ export async function saveGradeCheckin(
 
   const takenOn = (formData.get("taken_on") as string) || new Date().toISOString().slice(0, 10);
 
+  // Optional: how many assignments are missing right now. Pay comes from the drop since the last
+  // time a number was entered, so there's nothing to subtract by hand.
+  const missingRaw = (formData.get("missing_count") as string | null)?.trim() ?? "";
+  const missingCount = missingRaw === "" ? null : Number(missingRaw);
+  if (missingCount !== null && (!Number.isInteger(missingCount) || missingCount < 0)) {
+    return { error: "Missing assignments needs to be a whole number, or leave it blank." };
+  }
+
   const { data: checkin, error: checkinError } = await supabase
     .from("grade_checkins")
-    .insert({ household_id: household.householdId, plan_id: plan.id, taken_on: takenOn })
+    .insert({
+      household_id: household.householdId,
+      plan_id: plan.id,
+      taken_on: takenOn,
+      ...(missingCount !== null ? { missing_count: missingCount } : {}),
+    })
     .select("id")
     .single();
   if (checkinError) return { error: checkinError.message };
@@ -176,7 +189,11 @@ export async function saveGradeCheckin(
   // extra look) only tops up to this week's standing -- it can't pay the same week twice.
   const drafts: AwardDraft[] = [];
   if (!isBaseline) {
-    const standing = weeklyStanding(buildProgress(state.baseline, state.latest));
+    // Compare against the most recent earlier check-in that had a number (this one is last).
+    const counts = state.missingCounts.filter((c) => c.checkinId !== checkin.id);
+    const previousMissing = counts.length ? counts[counts.length - 1].count : null;
+    const turnedIn = missingCount !== null && previousMissing !== null ? Math.max(0, previousMissing - missingCount) : 0;
+    const standing = weeklyStanding(buildProgress(state.baseline, state.latest), turnedIn);
     const windowStart = shiftDate(takenOn, -6);
     const paidThisWeek = state.awards
       .filter((a) => a.kind === "weekly" && a.taken_on && a.taken_on >= windowStart && a.taken_on <= takenOn)

@@ -6,6 +6,7 @@
 export const GRADE_RULES = {
   perStep: 1, // dollars per step above where the class started the quarter, per week
   maxStepsPerClass: 4, // a class stops earning more after this many steps up
+  missingTurnedIn: 1, // per missing assignment the kid's total dropped since the last count
   keepItUp: 1, // per class, per week: started at an A (A- / 90%) and still there
   weeklyCap: 10, // most one kid can earn from a single week's upload
   cleanSheet: 15, // quarter-end: every class at C or better
@@ -101,13 +102,17 @@ export function buildProgress(baseline: Map<string, ClassGrade>, latest: Map<str
 }
 
 /** What this week's standing is worth before the weekly cap, with a one-line description. */
-export function weeklyStanding(progress: ClassProgress[]): { dollars: number; description: string } {
+export function weeklyStanding(
+  progress: ClassProgress[],
+  missingTurnedIn = 0
+): { dollars: number; description: string } {
   const earners = progress.filter((p) => p.weeklyDollars > 0);
-  const raw = earners.reduce((sum, p) => sum + p.weeklyDollars, 0);
+  const missingDollars = missingTurnedIn * GRADE_RULES.missingTurnedIn;
+  const raw = earners.reduce((sum, p) => sum + p.weeklyDollars, 0) + missingDollars;
   const dollars = Math.min(raw, GRADE_RULES.weeklyCap);
-  const description = earners.length
-    ? `Weekly grades: ${earners.map((p) => `${p.name} +$${p.weeklyDollars}`).join(", ")}`
-    : "Weekly grades";
+  const parts = earners.map((p) => `${p.name} +$${p.weeklyDollars}`);
+  if (missingDollars > 0) parts.push(`${missingTurnedIn} missing assignment${missingTurnedIn === 1 ? "" : "s"} turned in +$${missingDollars}`);
+  const description = parts.length ? `Weekly grades: ${parts.join(", ")}` : "Weekly grades";
   return { dollars, description };
 }
 

@@ -320,8 +320,10 @@ create table if not exists grade_checkins (
   household_id uuid not null references households(id) on delete cascade,
   plan_id uuid not null references grade_plans(id) on delete cascade,
   taken_on date not null default current_date,
+  missing_count integer check (missing_count is null or missing_count >= 0), -- optional: assignments missing at this check-in
   created_at timestamptz not null default now()
 );
+alter table grade_checkins add column if not exists missing_count integer check (missing_count is null or missing_count >= 0);
 
 create table if not exists grade_entries (
   id uuid primary key default gen_random_uuid(),

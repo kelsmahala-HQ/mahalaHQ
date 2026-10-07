@@ -116,6 +116,12 @@ export default async function KidDashboard({ household }: { household: CurrentHo
           <div className="rounded-2xl border-2 border-teal-100 bg-white p-3 shadow-sm">
             <ProgressList rows={gradeProgress} />
           </div>
+          {gradeState.missingCounts.length > 0 && (
+            <p className="mt-2 px-1 text-xs text-slate-500">
+              Missing assignments: {gradeState.missingCounts[gradeState.missingCounts.length - 1].count}. You earn ${GRADE_RULES.missingTurnedIn} for each
+              one you turn in.
+            </p>
+          )}
           <p className="mt-2 px-1 text-xs text-slate-500">
             You earn money every week your grades are above where they started, or you&rsquo;re holding an A. Quarter bonus: ${GRADE_RULES.cleanSheet} if
             every class is a C or better

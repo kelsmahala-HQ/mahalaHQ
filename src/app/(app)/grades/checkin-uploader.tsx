@@ -10,10 +10,12 @@ export default function CheckinUploader({
   planId,
   studentName,
   isFirstCheckin,
+  lastMissing,
 }: {
   planId: string;
   studentName: string;
   isFirstCheckin: boolean;
+  lastMissing: number | null;
 }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [detectedStudent, setDetectedStudent] = useState<string | null>(null);
@@ -120,6 +122,18 @@ export default function CheckinUploader({
                 </button>
               </div>
             ))}
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">
+              Missing assignments right now, all classes (optional)
+              {lastMissing !== null && <span className="text-slate-400"> — last time you entered {lastMissing}</span>}
+            </label>
+            <div className="w-32">
+              <input name="missing_count" type="number" min={0} placeholder="e.g. 3" className={inputClass} />
+            </div>
+            <p className="mt-0.5 text-xs text-slate-400">
+              Enter how many are missing now, not how many were turned in. The app pays $1 for each one the total drops by since last time.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <label className="text-xs font-medium text-slate-500">Date</label>
