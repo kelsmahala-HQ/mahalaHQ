@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { requireAdult } from "@/lib/household";
+import { redirect } from "next/navigation";
+import { requireHousehold } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
 import { format } from "date-fns";
 import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, groundedStatus, round2, weeklyStanding } from "@/lib/grades";
@@ -11,9 +12,12 @@ import GroundedBanner from "./grounded-banner";
 import { CapEditor, ClosePlanButton, MissingCountEditor, NewPlanForm } from "./plan-forms";
 import ProgressList from "./progress-list";
 import CashOwed from "../chores/cash-owed";
+import KidGrades from "./kid-grades";
 
 export default async function GradesPage() {
-  const household = await requireAdult();
+  const household = await requireHousehold();
+  if (household.role === "kid") return <KidGrades household={household} />;
+  if (household.role === "sitter") redirect("/dashboard");
   const supabase = await createClient();
 
   const [{ data: members }, { data: plans }] = await Promise.all([
@@ -51,9 +55,14 @@ export default async function GradesPage() {
           {(members ?? [])
             .filter((m) => m.role === "kid")
             .map((m) => (
-              <Link key={m.id} href={`/preview/${m.id}`} className="font-medium text-teal-600 hover:underline">
-                {m.display_name}&rsquo;s dashboard
-              </Link>
+              <span key={m.id} className="flex gap-2">
+                <Link href={`/preview/${m.id}`} className="font-medium text-teal-600 hover:underline">
+                  {m.display_name}&rsquo;s dashboard
+                </Link>
+                <Link href={`/preview/${m.id}/grades`} className="font-medium text-teal-600 hover:underline">
+                  grades page
+                </Link>
+              </span>
             ))}
         </p>
       )}

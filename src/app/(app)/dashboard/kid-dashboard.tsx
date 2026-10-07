@@ -3,16 +3,17 @@ import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import type { CurrentHousehold } from "@/lib/household";
 import { todayEasternDateStr } from "@/lib/chore-reminders";
-import { completeChore, skipChore } from "../chores/actions";
 import { availableNow, eligibleFor, upcoming } from "../chores/availability";
 import { wallClockDate } from "@/lib/wall-clock";
 import RedeemButton from "../chores/redeem-button";
-import ProgressList from "../grades/progress-list";
-import GroundedBanner from "../grades/grounded-banner";
-import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, groundedStatus, weeklyStanding } from "@/lib/grades";
+import { GRADE_RULES, buildProgress, formatMoney, groundedStatus, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import { balanceFor } from "@/lib/points";
 
+/**
+ * The kid's home screen: a snapshot, with Chores and Grades each on their own page. Rewards and
+ * what's coming up on the calendar stay here.
+ */
 export default async function KidDashboard({ household }: { household: CurrentHousehold }) {
   const supabase = await createClient();
   const todayStr = todayEasternDateStr();
@@ -41,9 +42,8 @@ export default async function KidDashboard({ household }: { household: CurrentHo
   const upcomingChores = myChores.filter((c) => upcoming(c, todayStr));
   const availablePoints = openChores.reduce((sum, c) => sum + (c.points ?? 0), 0);
 
-  // Chore points and grade points are separate currencies, each with its own rewards store.
   const choreBalance = balanceFor("chores", completions ?? [], redemptions ?? []);
-    const earned = (completions ?? [])
+  const earned = (completions ?? [])
     .filter((c) => c.approval_status === "approved" && c.kind !== "grade")
     .reduce((sum, c) => sum + c.points, 0);
   const pendingPoints = (completions ?? [])
@@ -53,8 +53,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
   const choreRewards = (rewards ?? []).filter((r) => r.source !== "grades");
   const pendingRewardIds = new Set(pendingRedemptions.map((r) => r.reward_id));
 
-  // Their own grade plan, if a parent has started one -- progress on every class plus the
-  // payouts still within reach, so there's always a visible next goal.
+  // A quick read on their grades for the summary card; the full picture is on the Grades page.
   const { data: gradePlan } = await supabase
     .from("grade_plans")
     .select("*")
@@ -65,6 +64,8 @@ export default async function KidDashboard({ household }: { household: CurrentHo
     .maybeSingle();
   const gradeState = gradePlan ? await loadPlanState(supabase, gradePlan.id) : null;
   const gradeProgress = gradeState ? buildProgress(gradeState.baseline, gradeState.latest) : [];
+  const gradePace = gradePlan ? weeklyStanding(gradeProgress, 0, gradePlan.weekly_cap ?? GRADE_RULES.weeklyCap).dollars : 0;
+  const gradeStatus = groundedStatus(gradeProgress);
 
   const now = new Date();
   const { data: events } = await supabase
@@ -106,52 +107,51 @@ export default async function KidDashboard({ household }: { household: CurrentHo
         )}
       </div>
 
-      {gradePlan && gradeState && !!gradeProgress.length && (
-        <div className="mb-6">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-lg font-bold text-slate-900">📚 Your Grades</h2>
-            <span className="text-sm font-medium text-teal-700">
-              {formatMoney(weeklyStanding(gradeProgress, 0, gradePlan.weekly_cap ?? GRADE_RULES.weeklyCap).dollars)} a week right now · {formatMoney(gradeState.earnedDollars - gradeState.heldDollars)} earned so far
-            </span>
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Link
+          href="/chores"
+          className="rounded-2xl border-2 border-teal-100 bg-white p-4 shadow-sm transition hover:border-teal-300"
+        >
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-lg font-bold text-slate-900">🧹 Chores</h2>
+            <span className="text-sm font-medium text-teal-600">Open →</span>
           </div>
-          <GroundedBanner status={groundedStatus(gradeProgress)} name={household.displayName} audience="kid" />
-          <p className="mb-3 text-xs">
-            <Link href="/grade-contract" className="font-medium text-teal-600 hover:underline">
-              📄 Read the grade agreement
-            </Link>
+          <p className="mt-1 text-sm text-slate-600">
+            {openChores.length === 0
+              ? "Nothing to do right now. Nice work!"
+              : `${openChores.length} waiting · ⭐ ${availablePoints} up for grabs`}
           </p>
-          {gradeState.heldDollars > 0 && (
-            <p className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">
-              💰 {formatMoney(gradeState.heldDollars)} is on hold. You get it as soon as you&rsquo;re back to {GRADE_RULES.maxBelowCMinus} or fewer
-              classes below a C-.
+          {upcomingChores.length > 0 && (
+            <p className="mt-0.5 text-xs text-slate-400">
+              {upcomingChores.length} more coming up
             </p>
           )}
-          <div className="rounded-2xl border-2 border-teal-100 bg-white p-3 shadow-sm">
-            <ProgressList rows={gradeProgress} />
-          </div>
-          {gradeState.missingCounts.length > 0 && (
-            <p className="mt-2 px-1 text-xs text-slate-500">
-              Missing assignments: {gradeState.missingCounts[gradeState.missingCounts.length - 1].count}. You earn ${GRADE_RULES.missingTurnedIn} for each
-              one you turn in.
-            </p>
-          )}
-          <p className="mt-2 px-1 text-xs text-slate-500">
-            Every class pays each week by its grade:{" "}
-            {GRADE_PAY.filter((g) => g.dollars > 0)
-              .map((g) => `${g.letter} ${formatMoney(g.dollars)}`)
-              .join(" · ")}
-            . Under a C- takes money off (
-            {GRADE_PAY.filter((g) => g.dollars < 0)
-              .map((g) => `${g.letter} ${formatMoney(g.dollars)}`)
-              .join(", ")}
-            ), but your week never goes below $0
-            . Quarter bonus: ${GRADE_RULES.cleanSheet} if every class is a C or better
-            {gradeProgress.filter((r) => r.underC).length > 0
-              ? ` — ${gradeProgress.filter((r) => r.underC).length} to go.`
-              : " — you're there!"}
-          </p>
-        </div>
-      )}
+        </Link>
+
+        {gradePlan && gradeProgress.length > 0 && (
+          <Link
+            href="/grades"
+            className={`rounded-2xl border-2 bg-white p-4 shadow-sm transition ${
+              gradeStatus.grounded ? "border-red-200 hover:border-red-300" : "border-teal-100 hover:border-teal-300"
+            }`}
+          >
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-lg font-bold text-slate-900">📚 Grades</h2>
+              <span className="text-sm font-medium text-teal-600">Open →</span>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">{formatMoney(gradePace)} a week at these grades</p>
+            {gradeStatus.grounded ? (
+              <p className="mt-0.5 text-xs font-medium text-red-700">You&rsquo;re staying in for now</p>
+            ) : gradeStatus.count >= gradeStatus.limit ? (
+              <p className="mt-0.5 text-xs font-medium text-amber-700">At the limit — one more and you&rsquo;re staying in</p>
+            ) : (
+              <p className="mt-0.5 text-xs text-slate-400">
+                {gradeProgress.length} classes · {gradeStatus.count} below a C-
+              </p>
+            )}
+          </Link>
+        )}
+      </div>
 
       {!!choreRewards.length && (
         <div className="mb-6">
@@ -176,69 +176,6 @@ export default async function KidDashboard({ household }: { household: CurrentHo
           </div>
         </div>
       )}
-
-      <div className="mb-6">
-        <h2 className="mb-3 text-lg font-bold text-slate-900">🧹 Your Chores</h2>
-        {!openChores.length ? (
-          <div className="rounded-2xl border-2 border-dashed border-yellow-300 bg-yellow-50 p-8 text-center">
-            <p className="text-4xl">🎉</p>
-            <p className="mt-2 font-medium text-slate-700">Nothing to do right now. Nice work!</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {openChores.map((chore) => (
-              <div key={chore.id} className="flex items-center justify-between rounded-2xl border-2 border-teal-100 bg-white p-4 shadow-sm">
-                <div>
-                  <p className="text-base font-semibold text-slate-900">{chore.title}</p>
-                  <p className="text-sm text-slate-400">
-                    {[
-                      chore.frequency !== "once" ? chore.frequency : null,
-                      chore.due_date ? `due ${chore.due_date}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {chore.points > 0 && (
-                    <span className="rounded-full bg-yellow-100 px-3 py-1 text-sm font-bold text-yellow-800">
-                      ⭐ {chore.points}
-                    </span>
-                  )}
-                  <form action={completeChore}>
-                    <input type="hidden" name="id" value={chore.id} />
-                    <button className="rounded-xl bg-teal-500 px-4 py-2 text-sm font-bold text-white hover:bg-teal-600">
-                      Done! ✅
-                    </button>
-                  </form>
-                  <form action={skipChore}>
-                    <input type="hidden" name="id" value={chore.id} />
-                    <button
-                      title="Only did part of it? Skip earns 0 points but clears it for now."
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-400 hover:bg-slate-50"
-                    >
-                      Skip
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {!!upcomingChores.length && (
-          <div className="mt-4">
-            <p className="mb-2 text-sm font-semibold text-slate-400">⏳ Coming up</p>
-            <div className="space-y-2">
-              {upcomingChores.map((chore) => (
-                <div key={chore.id} className="flex items-center justify-between rounded-xl bg-white/70 px-4 py-3 text-sm shadow-sm">
-                  <span className="font-medium text-slate-600">{chore.title}</span>
-                  <span className="text-xs text-slate-400">{chore.due_date ? `Available ${chore.due_date}` : ""}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
 
       {!!events?.length && (
         <div>

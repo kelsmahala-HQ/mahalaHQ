@@ -21,6 +21,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Home",
     items: [
       { href: "/chores", label: "Chores", icon: "🧹" },
+      { href: "/grades", label: "Grades", icon: "📚", roles: ["admin", "adult", "kid"] },
       { href: "/cleaning", label: "Cleaning Schedule", icon: "🧽", roles: FULL_ACCESS },
       { href: "/maintenance", label: "Maintenance", icon: "🔧", roles: FULL_ACCESS },
       { href: "/meals", label: "Meal Planner", icon: "🍽️" },
@@ -32,7 +33,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/calendar", label: "Calendar", icon: "📅" },
       { href: "/family", label: "Family Info", icon: "👨‍👩‍👧‍👦", roles: CAREGIVER_ACCESS },
-      { href: "/grades", label: "Grades", icon: "📚", roles: FULL_ACCESS },
       { href: "/documents", label: "Documents", icon: "📄", roles: FULL_ACCESS },
       { href: "/contacts", label: "Emergency Contacts", icon: "🚨", roles: CAREGIVER_ACCESS },
     ],
