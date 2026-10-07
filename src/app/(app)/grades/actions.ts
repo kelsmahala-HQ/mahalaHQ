@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult, type CurrentHousehold } from "@/lib/household";
-import { sendPushToMember } from "@/lib/push";
-import { GRADE_RULES, buildProgress, cleanSheetEarned, formatMoney, round2, weeklyStanding } from "@/lib/grades";
+import { sendPushToManagers, sendPushToMember } from "@/lib/push";
+import { GRADE_RULES, buildProgress, cleanSheetEarned, formatMoney, groundedStatus, round2, weeklyStanding } from "@/lib/grades";
 import { extractGradesFromFile, type ExtractedGrades } from "@/lib/grades-extract";
 import { loadPlanState } from "@/lib/grades-data";
 
@@ -153,6 +153,10 @@ export async function saveGradeCheckin(
 
   const takenOn = (formData.get("taken_on") as string) || new Date().toISOString().slice(0, 10);
 
+  // Remember whether the stay-in rule applied before this report, so we can tell if it just changed.
+  const before = await loadPlanState(supabase, plan.id);
+  const wasGrounded = groundedStatus(buildProgress(before.baseline, before.latest)).grounded;
+
   // Optional: how many assignments are missing right now. Pay comes from the drop since the last
   // time a number was entered, so there's nothing to subtract by hand.
   const missingRaw = (formData.get("missing_count") as string | null)?.trim() ?? "";
@@ -223,12 +227,40 @@ export async function saveGradeCheckin(
     return { error: e instanceof Error ? e.message : "Couldn't record the awards." };
   }
 
+  const after = groundedStatus(buildProgress(state.baseline, state.latest));
+  let groundedNote = "";
+  if (after.grounded !== wasGrounded) {
+    const { data: kid } = await supabase.from("household_members").select("display_name").eq("id", plan.member_id).single();
+    const kidName = kid?.display_name ?? "She";
+    if (after.grounded) {
+      groundedNote = ` ⚠️ ${kidName} now has ${after.count} classes below a C- (limit ${after.limit}), so she's staying in until it's back down.`;
+      await sendPushToMember(supabase, plan.member_id, {
+        title: "📚 You're staying in for now",
+        body: `${after.count} classes are below a C-. Get it down to ${after.limit} or fewer to be free to go.`,
+        url: "/dashboard",
+      });
+    } else {
+      groundedNote = ` ✅ ${kidName} is back to ${after.count} classes below a C- — free to go.`;
+      await sendPushToMember(supabase, plan.member_id, {
+        title: "📚 You're free to go!",
+        body: `You're back to ${after.count} classes below a C- or fewer. Nice work.`,
+        url: "/dashboard",
+      });
+    }
+    await sendPushToManagers(
+      supabase,
+      household.householdId,
+      { title: after.grounded ? "📚 Over the grade limit" : "📚 Back under the grade limit", body: groundedNote.trim(), url: "/grades" },
+      { exceptMemberId: household.memberId }
+    );
+  }
+
   revalidateGrades();
   return {
     success: true,
     message: paid.lines.length
-      ? `You owe ${paid.name} ${formatMoney(paid.dollars)} for this week — ${paid.lines.join("; ")}`
-      : "Saved — nothing new to pay (this week was already paid, or the cap is reached).",
+      ? `You owe ${paid.name} ${formatMoney(paid.dollars)} for this week — ${paid.lines.join("; ")}${groundedNote}`
+      : `Saved — nothing new to pay (this week was already paid, or the cap is reached).${groundedNote}`,
   };
 }
 

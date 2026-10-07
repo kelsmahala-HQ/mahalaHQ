@@ -14,7 +14,7 @@ export default function ProgressList({ rows }: { rows: ClassProgress[] }) {
         <div
           key={r.name}
           className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg px-3 py-2 text-sm ${
-            r.failing ? "bg-red-50" : "bg-slate-50"
+            r.belowCMinus ? "bg-red-50" : "bg-slate-50"
           }`}
         >
           <span className="font-medium text-slate-900">{r.name}</span>

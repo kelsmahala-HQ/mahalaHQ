@@ -8,7 +8,8 @@ import { availableNow, eligibleFor, upcoming } from "../chores/availability";
 import { wallClockDate } from "@/lib/wall-clock";
 import RedeemButton from "../chores/redeem-button";
 import ProgressList from "../grades/progress-list";
-import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, weeklyStanding } from "@/lib/grades";
+import GroundedBanner from "../grades/grounded-banner";
+import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, groundedStatus, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import { balanceFor } from "@/lib/points";
 
@@ -113,6 +114,7 @@ export default async function KidDashboard({ household }: { household: CurrentHo
               {formatMoney(weeklyStanding(gradeProgress, 0, gradePlan.weekly_cap ?? GRADE_RULES.weeklyCap).dollars)} a week right now · {formatMoney(gradeState.earnedDollars)} earned so far
             </span>
           </div>
+          <GroundedBanner status={groundedStatus(gradeProgress)} name={household.displayName} audience="kid" />
           <div className="rounded-2xl border-2 border-teal-100 bg-white p-3 shadow-sm">
             <ProgressList rows={gradeProgress} />
           </div>

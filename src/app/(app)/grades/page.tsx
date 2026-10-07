@@ -3,10 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
 import { format } from "date-fns";
-import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, round2, weeklyStanding } from "@/lib/grades";
+import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, groundedStatus, round2, weeklyStanding } from "@/lib/grades";
 import { loadPlanState } from "@/lib/grades-data";
 import CheckinUploader from "./checkin-uploader";
 import { markGradeAwardPaid } from "./actions";
+import GroundedBanner from "./grounded-banner";
 import { CapEditor, ClosePlanButton, MissingCountEditor, NewPlanForm } from "./plan-forms";
 import ProgressList from "./progress-list";
 import CashOwed from "../chores/cash-owed";
@@ -76,6 +77,8 @@ export default async function GradesPage() {
                 {formatMoney(state.earnedDollars)} of ${plan.cash_cap} earned this quarter
               </span>
             </div>
+
+            {progress.length > 0 && <GroundedBanner status={groundedStatus(progress)} name={name} audience="parent" />}
 
             {progress.length ? (
               <div className="mb-4">
@@ -170,6 +173,10 @@ export default async function GradesPage() {
             total drops by since the last number you entered.
           </li>
           <li>When you close the quarter, ${GRADE_RULES.cleanSheet} more if every class is at a C or better.</li>
+          <li>
+            House rule: more than {GRADE_RULES.maxBelowCMinus} classes below a C- and she doesn&rsquo;t go anywhere until it&rsquo;s back down. It&rsquo;s
+            shown on her card here and on her dashboard, and never changes the pay.
+          </li>
         </ul>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
           {GRADE_PAY.map((g) => (

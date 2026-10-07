@@ -7,6 +7,7 @@ export const GRADE_RULES = {
   missingTurnedIn: 1, // per missing assignment the kid's total dropped since the last count
   weeklyCap: 25, // default most one kid can earn from a single week's upload (editable per plan)
   cleanSheet: 15, // quarter-end: every class at a C or better
+  maxBelowCMinus: 3, // more classes than this under a C- and they stay in until it's back down
 } as const;
 
 /**
@@ -78,6 +79,8 @@ export type ClassProgress = {
   failing: boolean;
   /** Below a C right now -- what the quarter-end bonus is waiting on. */
   underC: boolean;
+  /** Below a C- (D+ or worse) -- what counts toward the stay-in-until-it's-fixed limit. */
+  belowCMinus: boolean;
   /** Dollars this class pays (or costs, if negative) per week at its current grade. */
   weeklyDollars: number;
   /** The next grade up that would raise this class's pay, and by how much. */
@@ -100,6 +103,7 @@ export function buildProgress(baseline: Map<string, ClassGrade>, latest: Map<str
         trend: "same",
         failing: false,
         underC: false,
+        belowCMinus: false,
         weeklyDollars: 0,
         next: null,
       });
@@ -141,6 +145,7 @@ export function buildProgress(baseline: Map<string, ClassGrade>, latest: Map<str
       trend: nowIdx < thenIdx ? "up" : nowIdx > thenIdx ? "down" : "same",
       failing: nowIdx >= F_INDEX,
       underC: nowIdx > C_INDEX,
+      belowCMinus: nowIdx > C_MINUS_INDEX,
       weeklyDollars: pay,
       next,
     });
@@ -190,4 +195,19 @@ export function baselineAndLatest(entries: { class_name: string; grade: string }
     latest.set(key, point);
   }
   return { baseline, latest };
+}
+
+/**
+ * The house rule: more than maxBelowCMinus classes under a C- and they don't go anywhere until
+ * it's back down. This is about privileges, not money -- it never changes what a week pays.
+ */
+export function groundedStatus(progress: ClassProgress[]): {
+  grounded: boolean;
+  count: number;
+  limit: number;
+  names: string[];
+} {
+  const names = progress.filter((p) => p.belowCMinus).map((p) => p.name);
+  const limit = GRADE_RULES.maxBelowCMinus;
+  return { grounded: names.length > limit, count: names.length, limit, names };
 }
