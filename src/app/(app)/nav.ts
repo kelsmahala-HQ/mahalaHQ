@@ -32,6 +32,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/calendar", label: "Calendar", icon: "📅" },
       { href: "/family", label: "Family Info", icon: "👨‍👩‍👧‍👦", roles: CAREGIVER_ACCESS },
+      { href: "/grades", label: "Grades", icon: "📚", roles: FULL_ACCESS },
       { href: "/documents", label: "Documents", icon: "📄", roles: FULL_ACCESS },
       { href: "/contacts", label: "Emergency Contacts", icon: "🚨", roles: CAREGIVER_ACCESS },
     ],

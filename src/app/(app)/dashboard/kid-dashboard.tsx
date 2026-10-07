@@ -7,6 +7,9 @@ import { completeChore, skipChore } from "../chores/actions";
 import { availableNow, eligibleFor, upcoming } from "../chores/availability";
 import { wallClockDate } from "@/lib/wall-clock";
 import RedeemButton from "../chores/redeem-button";
+import ProgressList from "../grades/progress-list";
+import { buildProgress } from "@/lib/grades";
+import { loadPlanState } from "@/lib/grades-data";
 
 export default async function KidDashboard({ household }: { household: CurrentHousehold }) {
   const supabase = await createClient();
@@ -49,6 +52,19 @@ export default async function KidDashboard({ household }: { household: CurrentHo
   const balance = earned - reserved;
   const pendingRewardIds = new Set(pendingRedemptions.map((r) => r.reward_id));
 
+  // Their own grade plan, if a parent has started one -- progress on every class plus the
+  // payouts still within reach, so there's always a visible next goal.
+  const { data: gradePlan } = await supabase
+    .from("grade_plans")
+    .select("*")
+    .eq("household_id", household.householdId)
+    .eq("member_id", household.memberId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  const gradeState = gradePlan ? await loadPlanState(supabase, gradePlan.id) : null;
+  const gradeProgress = gradeState ? buildProgress(gradeState.baseline, gradeState.latest, gradeState.awardedKeys) : [];
+
   const now = new Date();
   const { data: events } = await supabase
     .from("calendar_events")
@@ -87,6 +103,20 @@ export default async function KidDashboard({ household }: { household: CurrentHo
           </div>
         )}
       </div>
+
+      {gradePlan && gradeState && !!gradeProgress.length && (
+        <div className="mb-6">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="text-lg font-bold text-slate-900">📚 Your Grades</h2>
+            <span className="text-sm font-medium text-teal-700">
+              Earned ⭐ {gradeState.earnedPoints} · up to ⭐ {gradePlan.cash_cap * gradePlan.points_per_dollar}
+            </span>
+          </div>
+          <div className="rounded-2xl border-2 border-teal-100 bg-white p-3 shadow-sm">
+            <ProgressList rows={gradeProgress} pointsPerDollar={gradePlan.points_per_dollar} />
+          </div>
+        </div>
+      )}
 
       {!!rewards?.length && (
         <div className="mb-6">

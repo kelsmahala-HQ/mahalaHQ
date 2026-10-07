@@ -286,11 +286,67 @@ begin
     alter table chore_completions add constraint chore_completions_approval_status_check
       check (approval_status in ('approved', 'pending', 'rejected'));
   end if;
-  if not exists (select 1 from pg_constraint where conname = 'chore_completions_kind_check') then
-    alter table chore_completions add constraint chore_completions_kind_check
-      check (kind in ('completed', 'skipped'));
+  -- drop+recreate so installs that already have the older two-value version pick up 'grade'
+  -- (points earned from the Grades system, which ride the same balance math as chore points).
+  if exists (select 1 from pg_constraint where conname = 'chore_completions_kind_check') then
+    alter table chore_completions drop constraint chore_completions_kind_check;
   end if;
+  alter table chore_completions add constraint chore_completions_kind_check
+    check (kind in ('completed', 'skipped', 'grade'));
 end $$;
+
+-- ============================================================================
+-- Grades: parent-uploaded PowerSchool check-ins that pay points for improvement
+-- ============================================================================
+
+-- One plan per kid per grading period. cash_cap is the most real money (in dollars) the plan can
+-- ever earn -- awards are clipped to it, so a great quarter can't blow the budget.
+create table if not exists grade_plans (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  member_id uuid not null references household_members(id) on delete cascade,
+  label text not null,
+  cash_cap integer not null default 40 check (cash_cap >= 0),
+  points_per_dollar integer not null default 10 check (points_per_dollar > 0),
+  status text not null default 'active' check (status in ('active', 'closed')),
+  created_at timestamptz not null default now(),
+  closed_at timestamptz
+);
+
+-- Each upload of the PowerSchool grades screen. The first one for a plan is the starting
+-- baseline; later ones are compared against it.
+create table if not exists grade_checkins (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  plan_id uuid not null references grade_plans(id) on delete cascade,
+  taken_on date not null default current_date,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists grade_entries (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  checkin_id uuid not null references grade_checkins(id) on delete cascade,
+  plan_id uuid not null references grade_plans(id) on delete cascade,
+  class_name text not null,
+  grade text not null -- exactly as PowerSchool shows it: "94" or "C-"
+);
+
+-- Every payout, once. award_key (e.g. 'rescue:american history', 'climb:algebra i:2') is unique
+-- per plan so a grade that dips and recovers can't be paid twice.
+create table if not exists grade_awards (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  plan_id uuid not null references grade_plans(id) on delete cascade,
+  member_id uuid not null references household_members(id) on delete cascade,
+  class_name text,
+  kind text not null check (kind in ('rescue', 'climb', 'hold', 'clean_sheet')),
+  award_key text not null,
+  dollars integer not null,
+  points integer not null,
+  created_at timestamptz not null default now(),
+  unique (plan_id, award_key)
+);
 
 -- Parent-defined catalog of things kids can redeem points for (extra screen time, allowance, etc).
 create table if not exists rewards (
@@ -793,6 +849,10 @@ alter table inbox_items enable row level security;
 alter table emergency_info_sections enable row level security;
 alter table grocery_item_prices enable row level security;
 alter table chore_eligibility enable row level security;
+alter table grade_plans enable row level security;
+alter table grade_checkins enable row level security;
+alter table grade_entries enable row level security;
+alter table grade_awards enable row level security;
 
 -- calendar_event_reminders_sent intentionally gets NO policies either -- same lockdown as
 -- plaid_items, since it's only ever touched by the scheduled Netlify function.
@@ -840,7 +900,7 @@ declare
     'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks',
     'day_planner_highlights', 'cleaning_tasks', 'recipes', 'recipe_ingredients', 'meal_plan_entries',
     'chore_assignees', 'chore_eligibility', 'cleaning_task_assignees', 'inbox_items', 'emergency_info_sections',
-    'grocery_item_prices'
+    'grocery_item_prices', 'grade_plans', 'grade_checkins', 'grade_entries', 'grade_awards'
   ];
 begin
   foreach t in array tables loop

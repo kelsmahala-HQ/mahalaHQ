@@ -360,7 +360,7 @@ export default async function ChoresPage() {
               <div key={c.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm">
                 <span className="text-slate-900">
                   <span className="font-medium">{c.member_name ?? memberNameById.get(c.member_id) ?? "Someone"}</span>{" "}
-                  {c.kind === "skipped" ? "skipped" : "did"} {c.chore_title ?? "a chore"}
+                  {c.kind === "skipped" ? "skipped" : c.kind === "grade" ? "earned" : "did"} {c.chore_title ?? "a chore"}
                 </span>
                 <span className="flex items-center gap-2 text-xs text-slate-400">
                   {c.kind === "skipped" ? (
@@ -391,7 +391,7 @@ type ChoreCompletion = {
   member_name: string | null;
   chore_title: string | null;
   points: number;
-  kind: "completed" | "skipped";
+  kind: "completed" | "skipped" | "grade";
   approval_status: "approved" | "pending" | "rejected";
   completed_at: string;
 };
