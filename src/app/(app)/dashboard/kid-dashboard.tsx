@@ -127,6 +127,11 @@ export default async function KidDashboard({ household }: { household: CurrentHo
             {GRADE_PAY.filter((g) => g.dollars > 0)
               .map((g) => `${g.letter} ${formatMoney(g.dollars)}`)
               .join(" · ")}
+            . Under a C- takes money off (
+            {GRADE_PAY.filter((g) => g.dollars < 0)
+              .map((g) => `${g.letter} ${formatMoney(g.dollars)}`)
+              .join(", ")}
+            ), but your week never goes below $0
             . Quarter bonus: ${GRADE_RULES.cleanSheet} if every class is a C or better
             {gradeProgress.filter((r) => r.underC).length > 0
               ? ` — ${gradeProgress.filter((r) => r.underC).length} to go.`

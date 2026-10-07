@@ -30,6 +30,11 @@ export default function ProgressList({ rows }: { rows: ClassProgress[] }) {
                 earning {formatMoney(r.weeklyDollars)}/wk
               </span>
             )}
+            {r.weeklyDollars < 0 && (
+              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                costing {formatMoney(Math.abs(r.weeklyDollars))}/wk
+              </span>
+            )}
             {r.next && (
               <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">
                 {r.next.label}: +{formatMoney(r.next.dollars)}/wk

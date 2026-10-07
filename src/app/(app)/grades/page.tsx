@@ -115,7 +115,10 @@ export default async function GradesPage() {
         <h2 className="mb-2 text-sm font-semibold text-slate-700">How payouts work</h2>
         <ul className="space-y-1 text-sm text-slate-600">
           <li>Upload her PowerSchool grades once a week. Every upload pays for each class by the grade it has that day.</li>
-          <li>A grade that drops just pays the lower amount. Nothing is taken back from weeks already paid.</li>
+          <li>
+            Grades below a C- cost money, which offsets the strong classes. A week never goes below $0: they never owe you, and nothing carries
+            over. A grade that drops just pays less; nothing is taken back from weeks already paid.
+          </li>
           <li>
             Missing work: each upload has a box for how many assignments are missing right now. ${GRADE_RULES.missingTurnedIn} for each one the
             total drops by since the last number you entered.
@@ -123,15 +126,14 @@ export default async function GradesPage() {
           <li>When you close the quarter, ${GRADE_RULES.cleanSheet} more if every class is at a C or better.</li>
         </ul>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
-          {GRADE_PAY.filter((g) => g.dollars > 0).map((g) => (
-            <span key={g.letter}>
+          {GRADE_PAY.map((g) => (
+            <span key={g.letter} className={g.dollars < 0 ? "text-red-700" : ""}>
               <span className="font-medium">{g.letter}</span> {formatMoney(g.dollars)}
             </span>
           ))}
-          <span className="text-slate-400">D and below $0</span>
         </div>
         <p className="mt-2 text-xs text-slate-400">
-          Per class, per week. Percentages count as A+ 97+, A 93+, A- 90+, B+ 87+, B 83+, B- 80+, C+ 77+, C 73+, C- 70+. It all shows up in Cash to
+          Per class, per week. Percentages count as A+ 97+, A 93+, A- 90+, B+ 87+, B 83+, B- 80+, C+ 77+, C 73+, C- 70+, D+ 67+, D 63+, D- 60+, F+ 55+, F 50+, F- under 50. It all shows up in Cash to
           pay out above. Total payouts never go past each plan&rsquo;s weekly and quarterly caps.
         </p>
       </Card>

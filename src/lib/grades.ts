@@ -1,5 +1,5 @@
-// Weekly grade pay. Every upload pays each class by the grade it has that day (A+ pays the most),
-// so a grade that drops simply pays less -- nothing to claw back, nothing to track. Everything
+// Weekly grade pay. Every upload pays each class by the grade it has that day (A+ pays the most,
+// anything under a C- costs money), so a grade that drops simply pays less -- nothing to claw back, nothing to track. Everything
 // here is pure (no I/O) so the Grades page, the kid dashboard, and the server actions all compute
 // from the same rules.
 
@@ -9,25 +9,32 @@ export const GRADE_RULES = {
   cleanSheet: 15, // quarter-end: every class at a C or better
 } as const;
 
-/** Dollars per class per week by grade, best first. minPercent turns a percentage into a letter. */
+/**
+ * Dollars per class per week by grade, best first. Grades below a C- cost money, which offsets the
+ * strong classes -- but a week's total never goes below $0 (see weeklyStanding). minPercent turns a
+ * percentage into a letter.
+ */
 export const GRADE_PAY = [
   { letter: "A+", dollars: 3, minPercent: 97 },
   { letter: "A", dollars: 2.75, minPercent: 93 },
-  { letter: "A-", dollars: 2.5, minPercent: 90 },
+  { letter: "A-", dollars: 2.25, minPercent: 90 },
   { letter: "B+", dollars: 2, minPercent: 87 },
   { letter: "B", dollars: 1.75, minPercent: 83 },
-  { letter: "B-", dollars: 1.5, minPercent: 80 },
+  { letter: "B-", dollars: 1.25, minPercent: 80 },
   { letter: "C+", dollars: 1, minPercent: 77 },
-  { letter: "C", dollars: 0.75, minPercent: 73 },
-  { letter: "C-", dollars: 0.5, minPercent: 70 },
-  { letter: "D+", dollars: 0, minPercent: 67 },
-  { letter: "D", dollars: 0, minPercent: 63 },
-  { letter: "D-", dollars: 0, minPercent: 60 },
-  { letter: "F", dollars: 0, minPercent: 0 },
+  { letter: "C", dollars: 0.5, minPercent: 73 },
+  { letter: "C-", dollars: 0.25, minPercent: 70 },
+  { letter: "D+", dollars: -1, minPercent: 67 },
+  { letter: "D", dollars: -1.25, minPercent: 63 },
+  { letter: "D-", dollars: -1.75, minPercent: 60 },
+  { letter: "F+", dollars: -2, minPercent: 55 },
+  { letter: "F", dollars: -2.25, minPercent: 50 },
+  { letter: "F-", dollars: -3, minPercent: 0 },
 ] as const;
 
 const C_INDEX = GRADE_PAY.findIndex((g) => g.letter === "C");
-const F_INDEX = GRADE_PAY.length - 1;
+const F_INDEX = GRADE_PAY.findIndex((g) => g.letter === "F+");
+const C_MINUS_INDEX = GRADE_PAY.findIndex((g) => g.letter === "C-");
 
 export function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -35,8 +42,9 @@ export function round2(n: number): number {
 
 /** $3, $2.75, $0.50 -- whole dollars without cents, anything else with two decimals (Venmo-friendly). */
 export function formatMoney(n: number): string {
-  const v = round2(n);
-  return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
+  const v = round2(Math.abs(n));
+  const body = Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
+  return n < 0 ? `-${body}` : body;
 }
 
 /** "94" or "94.5%" becomes a letter via the percent cutoffs; "C-" is used as-is. Anything else is null. */
@@ -70,7 +78,7 @@ export type ClassProgress = {
   failing: boolean;
   /** Below a C right now -- what the quarter-end bonus is waiting on. */
   underC: boolean;
-  /** Dollars this class pays per week at its current grade. */
+  /** Dollars this class pays (or costs, if negative) per week at its current grade. */
   weeklyDollars: number;
   /** The next grade up that would raise this class's pay, and by how much. */
   next: { label: string; dollars: number } | null;
@@ -103,16 +111,25 @@ export function buildProgress(baseline: Map<string, ClassGrade>, latest: Map<str
     const pay = GRADE_PAY[nowIdx].dollars;
     const showPercent = /^\d/.test(now.grade.trim());
 
-    // The nearest better grade that actually pays more than this one does now.
+    // A class that's costing money points at the first grade that stops costing (C-); otherwise
+    // the nearest better grade that actually pays more than this one does now.
     let next: ClassProgress["next"] = null;
-    for (let i = nowIdx - 1; i >= 0; i--) {
-      if (GRADE_PAY[i].dollars > pay) {
-        const target = GRADE_PAY[i];
-        next = {
-          label: `Reach ${target.letter}${showPercent ? ` (${target.minPercent}%)` : ""}`,
-          dollars: round2(target.dollars - pay),
-        };
-        break;
+    if (pay < 0) {
+      const target = GRADE_PAY[C_MINUS_INDEX];
+      next = {
+        label: `Reach ${target.letter}${showPercent ? ` (${target.minPercent}%)` : ""}`,
+        dollars: round2(target.dollars - pay),
+      };
+    } else {
+      for (let i = nowIdx - 1; i >= 0; i--) {
+        if (GRADE_PAY[i].dollars > pay) {
+          const target = GRADE_PAY[i];
+          next = {
+            label: `Reach ${target.letter}${showPercent ? ` (${target.minPercent}%)` : ""}`,
+            dollars: round2(target.dollars - pay),
+          };
+          break;
+        }
       }
     }
 
@@ -122,7 +139,7 @@ export function buildProgress(baseline: Map<string, ClassGrade>, latest: Map<str
       latestGrade: now.grade,
       letter: nowLetter,
       trend: nowIdx < thenIdx ? "up" : nowIdx > thenIdx ? "down" : "same",
-      failing: nowIdx === F_INDEX,
+      failing: nowIdx >= F_INDEX,
       underC: nowIdx > C_INDEX,
       weeklyDollars: pay,
       next,
@@ -137,11 +154,12 @@ export function weeklyStanding(
   missingTurnedIn = 0,
   weeklyCap: number = GRADE_RULES.weeklyCap
 ): { dollars: number; description: string } {
-  const earners = progress.filter((p) => p.weeklyDollars > 0);
+  const counted = progress.filter((p) => p.weeklyDollars !== 0);
   const missingDollars = missingTurnedIn * GRADE_RULES.missingTurnedIn;
-  const raw = earners.reduce((sum, p) => sum + p.weeklyDollars, 0) + missingDollars;
-  const dollars = round2(Math.min(raw, weeklyCap));
-  const parts = earners.map((p) => `${p.name} ${formatMoney(p.weeklyDollars)}`);
+  const raw = counted.reduce((sum, p) => sum + p.weeklyDollars, 0) + missingDollars;
+  // Low grades subtract from the strong ones, but the week never goes below $0 -- they never owe.
+  const dollars = round2(Math.max(0, Math.min(raw, weeklyCap)));
+  const parts = counted.map((p) => `${p.name} ${formatMoney(p.weeklyDollars)}`);
   if (missingDollars > 0) {
     parts.push(`${missingTurnedIn} missing assignment${missingTurnedIn === 1 ? "" : "s"} turned in ${formatMoney(missingDollars)}`);
   }
