@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdult } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
@@ -33,6 +34,19 @@ export default async function GradesPage() {
   return (
     <div>
       <PageHeader title="Grades" subtitle="Upload PowerSchool, pay for improvement — not just for the grade." />
+
+      {!!(members ?? []).filter((m) => m.role === "kid").length && (
+        <p className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
+          See what they see:
+          {(members ?? [])
+            .filter((m) => m.role === "kid")
+            .map((m) => (
+              <Link key={m.id} href={`/preview/${m.id}`} className="font-medium text-teal-600 hover:underline">
+                {m.display_name}&rsquo;s dashboard
+              </Link>
+            ))}
+        </p>
+      )}
 
       <CashOwed householdId={household.householdId} />
 
