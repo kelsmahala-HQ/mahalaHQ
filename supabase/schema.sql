@@ -362,6 +362,17 @@ alter table grade_awards add column if not exists description text;
 alter table grade_awards add column if not exists paid_at timestamptz;
 alter table grade_awards add column if not exists held boolean not null default false;
 alter table grade_awards add column if not exists forfeited boolean not null default false;
+
+-- Everyone's "I've read the grade agreement and agree", per version of the agreement. Bumping
+-- CONTRACT_VERSION in src/lib/grade-contract.ts asks everyone to agree again.
+create table if not exists grade_contract_agreements (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  member_id uuid not null references household_members(id) on delete cascade,
+  version integer not null,
+  agreed_at timestamptz not null default now(),
+  unique (member_id, version)
+);
 do $$
 begin
   if exists (select 1 from pg_constraint where conname = 'grade_awards_kind_check') then
@@ -888,6 +899,7 @@ alter table grade_plans enable row level security;
 alter table grade_checkins enable row level security;
 alter table grade_entries enable row level security;
 alter table grade_awards enable row level security;
+alter table grade_contract_agreements enable row level security;
 
 -- calendar_event_reminders_sent intentionally gets NO policies either -- same lockdown as
 -- plaid_items, since it's only ever touched by the scheduled Netlify function.
@@ -935,7 +947,8 @@ declare
     'roundup_settings', 'roundup_purchases', 'roundup_payouts', 'push_subscriptions', 'day_planner_tasks',
     'day_planner_highlights', 'cleaning_tasks', 'recipes', 'recipe_ingredients', 'meal_plan_entries',
     'chore_assignees', 'chore_eligibility', 'cleaning_task_assignees', 'inbox_items', 'emergency_info_sections',
-    'grocery_item_prices', 'grade_plans', 'grade_checkins', 'grade_entries', 'grade_awards'
+    'grocery_item_prices', 'grade_plans', 'grade_checkins', 'grade_entries', 'grade_awards',
+    'grade_contract_agreements'
   ];
 begin
   foreach t in array tables loop

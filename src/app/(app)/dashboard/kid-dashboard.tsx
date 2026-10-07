@@ -115,6 +115,11 @@ export default async function KidDashboard({ household }: { household: CurrentHo
             </span>
           </div>
           <GroundedBanner status={groundedStatus(gradeProgress)} name={household.displayName} audience="kid" />
+          <p className="mb-3 text-xs">
+            <Link href="/grade-contract" className="font-medium text-teal-600 hover:underline">
+              📄 Read the grade agreement
+            </Link>
+          </p>
           {gradeState.heldDollars > 0 && (
             <p className="mb-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">
               💰 {formatMoney(gradeState.heldDollars)} is on hold. You get it as soon as you&rsquo;re back to {GRADE_RULES.maxBelowCMinus} or fewer

@@ -38,6 +38,13 @@ export default async function GradesPage() {
     <div>
       <PageHeader title="Grades" subtitle="Upload PowerSchool once a week. The app tells you what you owe." />
 
+      <p className="mb-2 text-sm">
+        <Link href="/grade-contract" className="font-medium text-teal-600 hover:underline">
+          📄 Grade agreement
+        </Link>{" "}
+        <span className="text-slate-400">— what everyone agrees to, with who&rsquo;s signed.</span>
+      </p>
+
       {!!(members ?? []).filter((m) => m.role === "kid").length && (
         <p className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
           See what they see:
