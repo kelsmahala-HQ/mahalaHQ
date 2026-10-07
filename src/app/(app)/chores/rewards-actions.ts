@@ -23,11 +23,14 @@ export async function addReward(formData: FormData): Promise<{ error: string } |
 
   const audience = (formData.get("audience") as string) === "adult" ? "adult" : "kid";
 
+  const cashValue = Number(formData.get("cash_value"));
+
   const { error } = await supabase.from("rewards").insert({
     household_id: household.householdId,
     name: formData.get("name") as string,
     cost: Number(formData.get("cost")),
     audience,
+    cash_value: Number.isInteger(cashValue) && cashValue > 0 ? cashValue : null,
   });
 
   if (error) return { error: error.message };
@@ -49,7 +52,7 @@ export async function requestRedemption(formData: FormData): Promise<{ error: st
   const supabase = await createClient();
   const rewardId = formData.get("reward_id") as string;
 
-  const { data: reward } = await supabase.from("rewards").select("id, name, cost").eq("id", rewardId).single();
+  const { data: reward } = await supabase.from("rewards").select("id, name, cost, cash_value").eq("id", rewardId).single();
   if (!reward) return { error: "That reward no longer exists." };
 
   const [{ data: completions }, { data: redemptions }] = await Promise.all([
@@ -68,6 +71,7 @@ export async function requestRedemption(formData: FormData): Promise<{ error: st
     reward_name: reward.name,
     member_id: household.memberId,
     cost: reward.cost,
+    cash_value: reward.cash_value,
   });
 
   if (error) return { error: error.message };
@@ -112,6 +116,21 @@ export async function approveRedemption(formData: FormData) {
   }
 
   revalidateRewards();
+}
+
+/** Stamps a cash reward as handed over -- it drops off the "still owed" list. */
+export async function markRedemptionPaid(formData: FormData) {
+  const household = await requireAdult();
+  const supabase = await createClient();
+  await supabase
+    .from("reward_redemptions")
+    .update({ paid_at: new Date().toISOString() })
+    .eq("id", formData.get("id") as string)
+    .eq("household_id", household.householdId)
+    .eq("status", "approved")
+    .is("paid_at", null);
+  revalidatePath("/chores");
+  revalidatePath("/grades");
 }
 
 /** Denying just removes the request -- frees up the reserved points, no need to keep a record. */

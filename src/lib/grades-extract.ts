@@ -49,7 +49,7 @@ Rules:
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        max_tokens: 1500,
+        max_tokens: 4000,
         messages: [{ role: "user", content: [fileBlock, { type: "text", text: prompt }] }],
       }),
     });
@@ -57,16 +57,29 @@ Rules:
     return { error: "Couldn't reach the grade-reading service. Try again in a moment." };
   }
 
-  if (!res.ok) return { error: `Grade reading failed (error ${res.status}). Try again in a moment.` };
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    console.error("grades-extract: API error", res.status, detail.slice(0, 500));
+    return { error: `Grade reading failed (error ${res.status}). Try again in a moment.` };
+  }
 
   const body = await res.json();
-  const raw = (body?.content?.[0]?.text as string | undefined)?.trim() ?? "";
-  const jsonText = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  // The reply can start with non-text blocks (e.g. reasoning), so don't assume content[0] is the
+  // answer -- join every text block, then take the outermost {...} in case of any preamble.
+  const raw = ((body?.content ?? []) as { type: string; text?: string }[])
+    .filter((b) => b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  const jsonText = start >= 0 && end > start ? raw.slice(start, end + 1) : "";
 
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(jsonText);
   } catch {
+    console.error("grades-extract: unparseable reply", { stop_reason: body?.stop_reason, raw: raw.slice(0, 500) });
     return { error: "Couldn't make sense of that file. Try a clearer screenshot of the grades page." };
   }
 

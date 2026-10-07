@@ -6,6 +6,7 @@ import { loadPlanState } from "@/lib/grades-data";
 import CheckinUploader from "./checkin-uploader";
 import { ClosePlanButton, NewPlanForm } from "./plan-forms";
 import ProgressList from "./progress-list";
+import CashOwed from "../chores/cash-owed";
 
 export default async function GradesPage() {
   const household = await requireAdult();
@@ -32,6 +33,8 @@ export default async function GradesPage() {
   return (
     <div>
       <PageHeader title="Grades" subtitle="Upload PowerSchool, pay for improvement — not just for the grade." />
+
+      <CashOwed householdId={household.householdId} />
 
       {activePlans.map((plan, i) => {
         const state = activeStates[i];

@@ -382,6 +382,13 @@ create table if not exists reward_redemptions (
   decided_by uuid references auth.users(id)
 );
 
+-- Real-money rewards: a reward with cash_value (whole dollars) is an IOU once approved. The
+-- redemption snapshots the dollar amount, and paid_at is stamped when the cash is handed over --
+-- "approved and not paid_at" is exactly what's still owed.
+alter table rewards add column if not exists cash_value integer check (cash_value is null or cash_value > 0);
+alter table reward_redemptions add column if not exists cash_value integer;
+alter table reward_redemptions add column if not exists paid_at timestamptz;
+
 -- ============================================================================
 -- House maintenance
 -- ============================================================================

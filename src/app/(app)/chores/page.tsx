@@ -15,6 +15,7 @@ import AddChoreForm from "./add-chore-form";
 import AddRewardForm from "./add-reward-form";
 import ChoreRow from "./chore-row";
 import RedeemButton from "./redeem-button";
+import CashOwed from "./cash-owed";
 
 function frequencyLabel(frequency: string, daysOfWeek: number[] | null) {
   return daysOfWeekLabel(daysOfWeek) ?? frequency;
@@ -253,6 +254,8 @@ export default async function ChoresPage() {
         </Card>
       )}
 
+      {canManage && <CashOwed householdId={household.householdId} hideWhenEmpty />}
+
       {!availableChores.length ? (
         <EmptyState
           message={
@@ -304,7 +307,10 @@ export default async function ChoresPage() {
                 <div key={r.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
                   <span className="text-sm text-slate-900">{r.name}</span>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-slate-500">⭐ {r.cost}</span>
+                    <span className="text-sm font-medium text-slate-500">
+                      ⭐ {r.cost}
+                      {r.cash_value ? ` · 💵 $${r.cash_value}` : ""}
+                    </span>
                     <form action={deleteReward}>
                       <input type="hidden" name="id" value={r.id} />
                       <button className={iconButtonClass}>Remove</button>
@@ -338,7 +344,10 @@ export default async function ChoresPage() {
                     </button>
                   </form>
                   <p className="pr-4 text-sm font-semibold text-slate-900">{r.name}</p>
-                  <p className="mb-2 mt-0.5 text-xs font-medium text-indigo-700">⭐ {r.cost}</p>
+                  <p className="mb-2 mt-0.5 text-xs font-medium text-indigo-700">
+                    ⭐ {r.cost}
+                    {r.cash_value ? ` · 💵 $${r.cash_value}` : ""}
+                  </p>
                   {ownPendingRewardIds.has(r.id) ? (
                     <button disabled className="w-full rounded-xl bg-slate-100 py-2 text-xs font-bold text-slate-400">
                       Waiting for approval

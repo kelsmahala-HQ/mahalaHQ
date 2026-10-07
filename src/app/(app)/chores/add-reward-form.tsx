@@ -37,6 +37,10 @@ export default function AddRewardForm({ audience = "kid" }: { audience?: "kid" |
         <label className="mb-1 block text-xs font-medium text-slate-500">Cost</label>
         <input name="cost" type="number" min={1} required placeholder="⭐ pts" className={inputClass} />
       </div>
+      <div className="w-28">
+        <label className="mb-1 block text-xs font-medium text-slate-500">Cash value</label>
+        <input name="cash_value" type="number" min={1} placeholder="$ (optional)" className={inputClass} />
+      </div>
       <button type="submit" disabled={loading} className={buttonClass}>
         {loading ? "Adding..." : "Add"}
       </button>
