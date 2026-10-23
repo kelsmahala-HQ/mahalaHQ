@@ -7,7 +7,7 @@ export const GRADE_RULES = {
   missingTurnedIn: 1, // per missing assignment the kid's total dropped since the last count
   weeklyCap: 25, // default most one kid can earn from a single week's upload (editable per plan)
   cleanSheet: 15, // quarter-end: every class at a C or better
-  maxBelowCMinus: 3, // more classes than this under a C- and they stay in until it's back down
+  maxBelowCMinus: 2, // most classes allowed under a C-; one more (3 or more) and they stay in until it's back down
 } as const;
 
 /**
@@ -198,7 +198,7 @@ export function baselineAndLatest(entries: { class_name: string; grade: string }
 }
 
 /**
- * The house rule: more than maxBelowCMinus classes under a C- and they don't go anywhere until
+ * The house rule: 3 or more classes under a C- (more than maxBelowCMinus) and they don't go anywhere until
  * it's back down. This is about privileges, not money -- it never changes what a week pays.
  */
 export function groundedStatus(progress: ClassProgress[]): {

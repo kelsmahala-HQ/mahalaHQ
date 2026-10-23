@@ -134,7 +134,7 @@ export default async function GradeContractPage() {
         <section>
           <h2 className="mb-1 text-base font-semibold text-slate-900">The stay-in rule</h2>
           <p>
-            If more than {limit} classes are below a C-, {youOrThey} don&rsquo;t go anywhere until it&rsquo;s back down to {limit} or fewer.
+            If {limit + 1} or more classes are below a C-, {youOrThey} don&rsquo;t go anywhere until it&rsquo;s back down to {limit} or fewer.
             While that&rsquo;s the case, the week&rsquo;s pay is <span className="font-medium">held</span>, not lost. As soon as a weekly report shows{" "}
             {isKid ? "you" : "them"} back at {limit} or fewer, everything that was held is released and added to what&rsquo;s owed. If the marking period
             ends while it&rsquo;s still being held, that money is forfeited.

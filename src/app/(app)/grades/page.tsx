@@ -196,7 +196,7 @@ export default async function GradesPage() {
           </li>
           <li>When you close the quarter, ${GRADE_RULES.cleanSheet} more if every class is at a C or better.</li>
           <li>
-            House rule: more than {GRADE_RULES.maxBelowCMinus} classes below a C- and she doesn&rsquo;t go anywhere until it&rsquo;s back down. While
+            House rule: {GRADE_RULES.maxBelowCMinus + 1} or more classes below a C- and she doesn&rsquo;t go anywhere until it&rsquo;s back down. While
             she&rsquo;s over the limit, each week&rsquo;s pay is held. The first report that has her back under releases all of it; anything still held
             when you close the quarter is lost.
           </li>

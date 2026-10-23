@@ -17,7 +17,7 @@ export default function GroundedBanner({ status, name, audience }: { status: Sta
           {audience === "kid" ? "You're staying in for now" : `${name} isn't going anywhere yet`}
         </p>
         <p className="mt-0.5 text-red-800">
-          {status.count} classes are below a C- (the limit is {status.limit}): {status.names.join(", ")}.{" "}
+          {status.count} classes are below a C- ({status.limit + 1} or more means staying in): {status.names.join(", ")}.{" "}
           {audience === "kid"
             ? `Get ${needed} of them back to a C- or better to be free to go.`
             : `${needed} more need to get back to a C- or better.`}

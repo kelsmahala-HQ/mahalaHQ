@@ -260,17 +260,17 @@ export async function saveGradeCheckin(
     const { data: kid } = await supabase.from("household_members").select("display_name").eq("id", plan.member_id).single();
     const kidName = kid?.display_name ?? "She";
     if (after.grounded) {
-      groundedNote = ` ⚠️ ${kidName} now has ${after.count} classes below a C- (limit ${after.limit}), so she's staying in until it's back down.`;
+      groundedNote = ` ⚠️ ${kidName} now has ${after.count} classes below a C- (${after.limit + 1} or more means staying in), so she's staying in until it's back down.`;
       await sendPushToMember(supabase, plan.member_id, {
         title: "📚 You're staying in for now",
         body: `${after.count} classes are below a C-. Get it down to ${after.limit} or fewer to be free to go.`,
         url: "/dashboard",
       });
     } else {
-      groundedNote = ` ✅ ${kidName} is back to ${after.count} classes below a C- — free to go.`;
+      groundedNote = ` ✅ ${kidName} is back to ${after.count} classes below a C-, so she's free to go.`;
       await sendPushToMember(supabase, plan.member_id, {
         title: "📚 You're free to go!",
-        body: `You're back to ${after.count} classes below a C- or fewer. Nice work.`,
+        body: `You're back to ${after.count} classes below a C-. Nice work.`,
         url: "/dashboard",
       });
     }
