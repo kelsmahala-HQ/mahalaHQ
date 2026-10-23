@@ -2,8 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { CurrentHousehold } from "@/lib/household";
 import { EmptyState, PageHeader } from "@/components/ui";
-import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, groundedStatus, round2, weeklyStanding } from "@/lib/grades";
-import { loadPlanState } from "@/lib/grades-data";
+import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, groundedStatus, weeklyStanding } from "@/lib/grades";
+import { isGrounded, loadPlanState, splitOwedAndHeld } from "@/lib/grades-data";
 import GroundedBanner from "./grounded-banner";
 import ProgressList from "./progress-list";
 
@@ -39,10 +39,9 @@ export default async function KidGrades({ household }: { household: CurrentHouse
 
   const weeklyCap = plan.weekly_cap ?? GRADE_RULES.weeklyCap;
   const pace = weeklyStanding(progress, 0, weeklyCap).dollars;
-  // What's been earned and isn't paid yet (held pay isn't owed until she's back under the limit).
-  const owedNow = round2(
-    state.awards.filter((a) => !a.paid_at && !a.held && !a.forfeited && a.dollars > 0).reduce((sum, a) => sum + a.dollars, 0)
-  );
+  // Earned and not paid yet. While she's grounded it all accumulates instead of being payable.
+  const split = splitOwedAndHeld(state.awards, isGrounded(state));
+  const owedNow = split.owedDollars;
   const underC = progress.filter((r) => r.underC).length;
 
   return (
@@ -66,9 +65,9 @@ export default async function KidGrades({ household }: { household: CurrentHouse
 
       <GroundedBanner status={groundedStatus(progress)} name={household.displayName} audience="kid" />
 
-      {state.heldDollars > 0 && (
+      {split.heldDollars > 0 && (
         <p className="mb-4 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">
-          💰 {formatMoney(state.heldDollars)} is on hold. You get it as soon as you&rsquo;re back to {GRADE_RULES.maxBelowCMinus} or fewer classes below a
+          💰 {formatMoney(split.heldDollars)} is on hold. You get it as soon as you&rsquo;re back to {GRADE_RULES.maxBelowCMinus} or fewer classes below a
           C-.
         </p>
       )}

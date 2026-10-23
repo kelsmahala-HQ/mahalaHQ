@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { baselineAndLatest, round2 } from "./grades";
+import { baselineAndLatest, buildProgress, groundedStatus, round2 } from "./grades";
 
 /** Everything the Grades page, kid dashboard card, and server actions need to know about a plan. */
 export async function loadPlanState(supabase: SupabaseClient, planId: string) {
@@ -60,5 +60,30 @@ export async function loadPlanState(supabase: SupabaseClient, planId: string) {
     earnedDollars: round2(awardRows.filter((a) => !a.forfeited).reduce((sum, a) => sum + Number(a.dollars), 0)),
     heldDollars: round2(awardRows.filter((a) => a.held && !a.forfeited).reduce((sum, a) => sum + Number(a.dollars), 0)),
     paidDollars: round2(awardRows.filter((a) => a.paid_at).reduce((sum, a) => sum + Number(a.dollars), 0)),
+  };
+}
+
+type PlanState = Awaited<ReturnType<typeof loadPlanState>>;
+
+/** Is this kid over the stay-in limit on her most recent report? */
+export function isGrounded(state: Pick<PlanState, "baseline" | "latest">): boolean {
+  return groundedStatus(buildProgress(state.baseline, state.latest)).grounded;
+}
+
+/**
+ * Splits what hasn't been paid yet into "owed" (you can pay it now) and "on hold" (you can't).
+ * While a kid is grounded, EVERYTHING unpaid accumulates -- nothing can be marked paid, whether or
+ * not that particular week was stamped held when it was saved (reports saved before a rule change
+ * weren't). Once she's back under the limit it all becomes payable again.
+ */
+export function splitOwedAndHeld(awards: PlanState["awards"], grounded: boolean) {
+  const unpaid = awards.filter((a) => !a.paid_at && !a.forfeited && a.dollars > 0);
+  const onHold = unpaid.filter((a) => a.held || grounded);
+  const owed = unpaid.filter((a) => !(a.held || grounded));
+  return {
+    owed,
+    onHold,
+    owedDollars: round2(owed.reduce((sum, a) => sum + a.dollars, 0)),
+    heldDollars: round2(onHold.reduce((sum, a) => sum + a.dollars, 0)),
   };
 }

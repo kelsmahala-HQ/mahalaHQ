@@ -387,6 +387,21 @@ export async function updateGradePlanCap(formData: FormData): Promise<{ error: s
   return { success: true };
 }
 
+/** True while the kid's most recent report has her over the stay-in limit -- nothing of hers can be paid. */
+async function memberIsGrounded(supabase: SupabaseClient, householdId: string, memberId: string): Promise<boolean> {
+  const { data: plan } = await supabase
+    .from("grade_plans")
+    .select("id")
+    .eq("household_id", householdId)
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  if (!plan) return false;
+  const state = await loadPlanState(supabase, plan.id);
+  return groundedStatus(buildProgress(state.baseline, state.latest)).grounded;
+}
+
 /** Marks one owed grade payout as handed over, so it leaves the Cash to pay out list. Held pay can't be paid. */
 export async function markGradeAwardPaid(formData: FormData) {
   const household = await requireAdult();
@@ -395,6 +410,7 @@ export async function markGradeAwardPaid(formData: FormData) {
 
   const { data: award } = await supabase.from("grade_awards").select("*").eq("id", id).eq("household_id", household.householdId).single();
   if (!award || award.held || award.forfeited || award.paid_at) return;
+  if (await memberIsGrounded(supabase, household.householdId, award.member_id)) return;
 
   await supabase.from("grade_awards").update({ paid_at: new Date().toISOString() }).eq("id", id);
   revalidateGrades();
@@ -413,6 +429,7 @@ export async function markAllGradeAwardsPaid(formData: FormData) {
     .is("paid_at", null);
   const ids = (rows ?? []).filter((r) => !r.held && !r.forfeited).map((r) => r.id);
   if (!ids.length) return;
+  if (await memberIsGrounded(supabase, household.householdId, formData.get("member_id") as string)) return;
 
   await supabase.from("grade_awards").update({ paid_at: new Date().toISOString() }).in("id", ids);
   revalidateGrades();

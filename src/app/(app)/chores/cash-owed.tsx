@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui";
 import { markRedemptionPaid } from "./rewards-actions";
 import { markAllGradeAwardsPaid, markGradeAwardPaid } from "../grades/actions";
-import { formatMoney, round2 } from "@/lib/grades";
+import { buildProgress, formatMoney, groundedStatus, round2 } from "@/lib/grades";
+import { loadPlanState } from "@/lib/grades-data";
 
 type Item = {
   key: string;
@@ -57,9 +58,27 @@ export default async function CashOwed({ householdId, hideWhenEmpty = false }: {
     supabase.from("household_members").select("id, display_name").eq("household_id", householdId),
   ]);
 
+  // Kids who are grounded right now: nothing of theirs can be paid, it all accumulates.
+  const { data: activePlans } = await supabase
+    .from("grade_plans")
+    .select("id, member_id")
+    .eq("household_id", householdId)
+    .eq("status", "active");
+  const planStates = await Promise.all((activePlans ?? []).map((p) => loadPlanState(supabase, p.id)));
+  const groundedMembers = new Set(
+    (activePlans ?? [])
+      .filter((_, i) => groundedStatus(buildProgress(planStates[i].baseline, planStates[i].latest)).grounded)
+      .map((p) => p.member_id as string)
+  );
+  const heldByMember = new Map<string, number>();
+  for (const g of owedGrades ?? []) {
+    if (g.forfeited || !(g.held || groundedMembers.has(g.member_id))) continue;
+    heldByMember.set(g.member_id, round2((heldByMember.get(g.member_id) ?? 0) + Number(g.dollars)));
+  }
+
   const owed: Item[] = [
     // Held pay (she's over the stay-in limit) and forfeited pay aren't owed yet.
-    ...(owedGrades ?? []).filter((g) => !g.held && !g.forfeited).map((g) => ({
+    ...(owedGrades ?? []).filter((g) => !g.held && !g.forfeited && !groundedMembers.has(g.member_id)).map((g) => ({
       key: `g-${g.id}`,
       kind: "grade" as const,
       id: g.id,
@@ -156,6 +175,17 @@ export default async function CashOwed({ householdId, hideWhenEmpty = false }: {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {heldByMember.size > 0 && (
+        <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          {[...heldByMember].map(([memberId, dollars]) => (
+            <p key={memberId}>
+              💰 {nameById.get(memberId) ?? "Someone"}: {formatMoney(dollars)} on hold while grounded. It can&rsquo;t be paid until she&rsquo;s back under the
+              limit.
+            </p>
+          ))}
         </div>
       )}
 

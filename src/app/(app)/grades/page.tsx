@@ -5,7 +5,7 @@ import { requireHousehold } from "@/lib/household";
 import { Card, CollapsibleCard, EmptyState, PageHeader } from "@/components/ui";
 import { format } from "date-fns";
 import { GRADE_PAY, GRADE_RULES, buildProgress, formatMoney, groundedStatus, round2, weeklyStanding } from "@/lib/grades";
-import { loadPlanState } from "@/lib/grades-data";
+import { isGrounded, loadPlanState, splitOwedAndHeld } from "@/lib/grades-data";
 import CheckinUploader from "./checkin-uploader";
 import { markGradeAwardPaid } from "./actions";
 import GroundedBanner from "./grounded-banner";
@@ -77,10 +77,12 @@ export default async function GradesPage() {
         // The latest report's payout, and anything still unpaid from before it.
         const weeklyAwards = state.awards.filter((a) => a.kind === "weekly" && !a.forfeited);
         const latestReport = weeklyAwards.length ? weeklyAwards[weeklyAwards.length - 1] : null;
+        // While she's grounded nothing can be paid -- it all accumulates until she's back under the limit.
+        const grounded = isGrounded(state);
+        const split = splitOwedAndHeld(state.awards, grounded);
+        const latestOnHold = !!latestReport && !latestReport.paid_at && (latestReport.held || grounded);
         const earlierOwed = round2(
-          state.awards
-            .filter((a) => !a.paid_at && !a.held && !a.forfeited && a.dollars > 0 && a.id !== latestReport?.id)
-            .reduce((sum, a) => sum + a.dollars, 0)
+          split.owed.filter((a) => a.id !== latestReport?.id).reduce((sum, a) => sum + a.dollars, 0)
         );
         const standing = weeklyStanding(progress, 0, weeklyCap);
         return (
@@ -134,7 +136,7 @@ export default async function GradesPage() {
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-800">
-                      {latestReport.paid_at ? "Paid for this report" : latestReport.held ? "Held for this report" : "Owed for this report"}
+                      {latestReport.paid_at ? "Paid for this report" : latestOnHold ? "On hold for this report" : "Owed for this report"}
                       {latestReport.taken_on && (
                         <span className="ml-2 text-xs font-normal text-slate-500">
                           {format(new Date(`${latestReport.taken_on}T00:00:00`), "MMM d")}
@@ -143,7 +145,7 @@ export default async function GradesPage() {
                     </p>
                     <div className="flex items-center gap-3">
                       <span className="text-lg font-bold text-emerald-700">{formatMoney(latestReport.dollars)}</span>
-                      {!latestReport.paid_at && !latestReport.held && (
+                      {!latestReport.paid_at && !latestOnHold && (
                         <form action={markGradeAwardPaid}>
                           <input type="hidden" name="id" value={latestReport.id} />
                           <button className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-700">
@@ -154,10 +156,10 @@ export default async function GradesPage() {
                     </div>
                   </div>
                   {latestReport.description && <p className="mt-1 text-xs text-slate-500">{latestReport.description}</p>}
-                  {state.heldDollars > 0 && (
+                  {split.heldDollars > 0 && (
                     <p className="mt-1 text-xs font-medium text-amber-800">
-                      💰 {formatMoney(state.heldDollars)} is on hold. It becomes owed once she&rsquo;s back to {GRADE_RULES.maxBelowCMinus} or fewer classes
-                      below a C-, and is lost if the quarter closes first.
+                      💰 {formatMoney(split.heldDollars)} is accumulating while she&rsquo;s grounded. You can&rsquo;t mark it paid until she&rsquo;s back to{" "}
+                      {GRADE_RULES.maxBelowCMinus} or fewer classes below a C-, and pay earned during the hold is lost if the quarter closes first.
                     </p>
                   )}
                   {earlierOwed > 0 && (
