@@ -22,6 +22,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/chores", label: "Chores", icon: "🧹" },
       { href: "/grades", label: "Grades", icon: "📚", roles: ["admin", "adult", "kid"] },
+      { href: "/habits", label: "Habits", icon: "🔥", roles: ["admin", "adult", "kid"] },
       { href: "/cleaning", label: "Cleaning Schedule", icon: "🧽", roles: FULL_ACCESS },
       { href: "/maintenance", label: "Maintenance", icon: "🔧", roles: FULL_ACCESS },
       { href: "/meals", label: "Meal Planner", icon: "🍽️" },
