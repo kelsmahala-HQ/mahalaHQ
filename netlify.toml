@@ -4,6 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Turbopack's build cache can contain server-side env values and is never served; skip just that folder.
+  SECRETS_SCAN_OMIT_PATHS = ".next/cache/**,.netlify/.next/cache/**"
 
 [functions]
   directory = "netlify/functions"
