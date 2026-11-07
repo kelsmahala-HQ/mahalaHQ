@@ -7,7 +7,7 @@ import { requireAdult, type CurrentHousehold } from "@/lib/household";
 import { sendPushToManagers, sendPushToMember } from "@/lib/push";
 import { GRADE_RULES, buildProgress, cleanSheetEarned, formatMoney, groundedStatus, round2, weeklyStanding } from "@/lib/grades";
 import { extractGradesFromFile, type ExtractedGrades } from "@/lib/grades-extract";
-import { loadPlanState } from "@/lib/grades-data";
+import { isGrounded, loadPlanState } from "@/lib/grades-data";
 
 type Plan = { id: string; member_id: string; label: string; cash_cap: number; weekly_cap?: number | null; status: string };
 
@@ -330,14 +330,16 @@ export async function closeGradePlan(formData: FormData): Promise<{ error: strin
     return { error: e instanceof Error ? e.message : "Couldn't record the awards." };
   }
 
-  // Pay still being held when the quarter ends is gone.
+  // A kid who is still grounded when the quarter ends loses everything she hasn't been paid yet,
+  // whether or not each week was stamped held when it was saved. Otherwise only stamped-held pay goes.
   let forfeitedDollars = 0;
-  const { data: stillHeld, error: stillHeldError } = await supabase
+  let heldQuery = supabase
     .from("grade_awards")
     .select("id, dollars")
     .eq("plan_id", plan.id)
-    .eq("held", true)
     .eq("forfeited", false);
+  heldQuery = isGrounded(state) ? heldQuery.is("paid_at", null).gt("dollars", 0) : heldQuery.eq("held", true);
+  const { data: stillHeld, error: stillHeldError } = await heldQuery;
   if (!stillHeldError && stillHeld?.length) {
     const { error: forfeitError } = await supabase
       .from("grade_awards")
@@ -359,7 +361,7 @@ export async function closeGradePlan(formData: FormData): Promise<{ error: strin
       (paid.lines.length
         ? `Closed. You owe ${paid.name} another ${formatMoney(paid.dollars)} — ${paid.lines.join("; ")}`
         : "Closed — no quarter-end bonuses earned.") +
-      (forfeitedDollars > 0 ? ` ${formatMoney(forfeitedDollars)} that was still on hold is forfeited.` : ""),
+      (forfeitedDollars > 0 ? ` ${formatMoney(forfeitedDollars)} that hadn't been paid is forfeited because she was still grounded.` : ""),
   };
 }
 

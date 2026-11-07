@@ -228,7 +228,7 @@ export default async function GradesPage() {
                     {nameById.get(plan.member_id) ?? "Student"} <span className="text-slate-400">· {plan.label}</span>
                     <span className="block text-xs text-slate-500">
                       {bonus ? `Includes the ${formatMoney(bonus.dollars)} every-class-C-or-better bonus.` : "No quarter-end bonus."}
-                      {forfeited > 0 && ` ${formatMoney(forfeited)} on hold was forfeited.`}
+                      {forfeited > 0 && ` ${formatMoney(forfeited)} was forfeited (still grounded at quarter end).`}
                     </span>
                   </span>
                   <span className="text-slate-500">{formatMoney(closedStates[i].earnedDollars)}</span>
