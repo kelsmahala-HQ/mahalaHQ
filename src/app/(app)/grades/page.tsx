@@ -219,14 +219,22 @@ export default async function GradesPage() {
       {!!closedPlans.length && (
         <CollapsibleCard title="Past quarters" className="mb-6">
           <div className="space-y-1">
-            {closedPlans.map((plan, i) => (
-              <div key={plan.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                <span className="text-slate-900">
-                  {nameById.get(plan.member_id) ?? "Student"} <span className="text-slate-400">· {plan.label}</span>
-                </span>
-                <span className="text-slate-500">{formatMoney(closedStates[i].earnedDollars)}</span>
-              </div>
-            ))}
+            {closedPlans.map((plan, i) => {
+              const bonus = closedStates[i].awards.find((a) => a.award_key === "clean_sheet");
+              const forfeited = round2(closedStates[i].awards.filter((a) => a.forfeited).reduce((sum, a) => sum + a.dollars, 0));
+              return (
+                <div key={plan.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                  <span className="text-slate-900">
+                    {nameById.get(plan.member_id) ?? "Student"} <span className="text-slate-400">· {plan.label}</span>
+                    <span className="block text-xs text-slate-500">
+                      {bonus ? `Includes the ${formatMoney(bonus.dollars)} every-class-C-or-better bonus.` : "No quarter-end bonus."}
+                      {forfeited > 0 && ` ${formatMoney(forfeited)} on hold was forfeited.`}
+                    </span>
+                  </span>
+                  <span className="text-slate-500">{formatMoney(closedStates[i].earnedDollars)}</span>
+                </div>
+              );
+            })}
           </div>
         </CollapsibleCard>
       )}
